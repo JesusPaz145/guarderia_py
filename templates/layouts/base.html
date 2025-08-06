@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Guardería{% endblock %}</title>
+  <!-- Enlace a Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Enlace a Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Enlace a Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #fcebeb 0%, #fbc2eb 100%);
+      font-family: 'Inter', sans-serif;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #fcebeb;
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #fbc2eb;
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ff9a9e;
+    }
+    .btn-logout {
+      background: linear-gradient(45deg, #ff9a9e 0%, #fbc2eb 100%);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 10px rgba(255, 154, 158, 0.3);
+    }
+    .btn-logout:hover {
+      background: linear-gradient(45deg, #fbc2eb 0%, #ff9a9e 100%);
+      box-shadow: 0 6px 15px rgba(255, 154, 158, 0.5);
+      transform: translateY(-1px);
+    }
+    .sidebar-item {
+      transition: all 0.2s ease;
+    }
+    .sidebar-item:hover {
+      background-color: rgba(255, 228, 236, 0.7);
+      color: #d8b4fe;
+      transform: translateX(5px);
+    }
+    .sidebar-item.active {
+      background-color: #fbc2eb;
+      color: white;
+      font-weight: 600;
+      border-left: 5px solid #ff9a9e;
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="flex min-h-screen">
+  {% include 'layouts/sidebar.html' %}
+  
+  <div class="flex-1 flex flex-col overflow-hidden">
+    {% include 'layouts/header.html' %}
+    
+    <main class="flex-1 overflow-y-auto p-6 bg-pink-50/50">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('-translate-x-full');
+      sidebar.classList.toggle('translate-x-0');
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target) && window.innerWidth < 768) {
+        if (sidebar.classList.contains('translate-x-0')) {
+          sidebar.classList.remove('translate-x-0');
+          sidebar.classList.add('-translate-x-full');
+        }
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+      }
+    });
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

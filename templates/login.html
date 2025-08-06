@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Guardería</title>
+  <!-- Enlace a Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Enlace a Google Fonts para una tipografía más suave -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Fondo degradado suave de rosa pastel */
+    body {
+      background: linear-gradient(135deg, #fcebeb 0%, #fbc2eb 100%); /* Ligeramente ajustado para más suavidad */
+      font-family: 'Inter', sans-serif; /* Aplicamos la fuente Inter */
+    }
+    /* Estilos personalizados para el foco de los inputs */
+    input:focus {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(253, 207, 232, 0.5); /* Sombra de foco más suave y pastel */
+    }
+    /* Estilo para el botón con degradado y sombra */
+    .btn-pink-gradient {
+      background: linear-gradient(45deg, #fbc2eb 0%, #ff9a9e 100%);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(251, 194, 235, 0.4);
+    }
+    .btn-pink-gradient:hover {
+      background: linear-gradient(45deg, #ff9a9e 0%, #fbc2eb 100%);
+      box-shadow: 0 6px 20px rgba(251, 194, 235, 0.6);
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white/70 backdrop-blur-md rounded-3xl shadow-2xl p-8 sm:p-10 w-full max-w-md border-4 border-pink-100 transform transition-all duration-300 hover:scale-[1.01]">
+    <h1 class="text-4xl font-extrabold text-pink-500 mb-8 text-center tracking-tight drop-shadow-sm">
+      Iniciar Sesión
+    </h1>
+    <form method="post" action="/login">
+      <div class="mb-6">
+        <label class="block text-pink-600 mb-2 text-lg font-semibold" for="username">Usuario</label>
+        <input
+          class="w-full px-4 py-3 border-2 border-pink-200 rounded-xl bg-pink-50 text-pink-800 text-lg placeholder-pink-300 transition-all duration-200 focus:border-pink-300"
+          type="text"
+          id="username"
+          name="username"
+          placeholder="Tu nombre de usuario"
+          required
+        >
+      </div>
+      <div class="mb-8">
+        <label class="block text-pink-600 mb-2 text-lg font-semibold" for="password">Contraseña</label>
+        <input
+          class="w-full px-4 py-3 border-2 border-pink-200 rounded-xl bg-pink-50 text-pink-800 text-lg placeholder-pink-300 transition-all duration-200 focus:border-pink-300"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Tu contraseña secreta"
+          required
+        >
+      </div>
+      <button
+        class="w-full text-white font-bold py-3 px-4 rounded-xl text-lg shadow-lg btn-pink-gradient"
+        type="submit"
+      >
+        Entrar
+      </button>
+    </form>
+    {% if error %}
+      <p class="text-red-500 text-center mt-6 text-lg font-medium bg-red-50 p-3 rounded-lg border border-red-200">
+        {{ error }}
+      </p>
+    {% endif %}
+  </div>
+</body>
+</html>

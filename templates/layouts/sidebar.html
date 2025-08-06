@@ -1,0 +1,36 @@
+<!-- Sidebar (Menú Lateral) -->
+<aside id="sidebar" class="bg-pink-100/80 backdrop-blur-sm w-64 md:w-72 lg:w-80 p-6 flex flex-col justify-between transition-all duration-300 ease-in-out fixed md:relative h-full z-50 -translate-x-full md:translate-x-0 shadow-xl md:shadow-none rounded-r-3xl md:rounded-none">
+  <div>
+    <!-- Título o Logo del Dashboard -->
+    <div class="text-center mb-10 mt-4">
+      <h2 class="text-3xl font-extrabold text-pink-600 tracking-tight">
+        <i class="fas fa-baby-carriage text-pink-400 mr-2"></i>Guardería
+      </h2>
+    </div>
+
+    <!-- Opciones del Menú -->
+    <nav>
+      <ul>
+        <li class="mb-4">
+          <a href="/dashboard" class="sidebar-item flex items-center p-3 rounded-xl text-pink-700 hover:text-pink-800 text-lg font-medium {% if active_page == 'dashboard' %}active{% endif %}">
+            <i class="fas fa-chart-line mr-3 text-pink-500"></i> Reportes
+          </a>
+        </li>
+        <li class="mb-4">
+          <a href="/ninos" class="sidebar-item flex items-center p-3 rounded-xl text-pink-700 hover:text-pink-800 text-lg font-medium {% if active_page == 'ninos' %}active{% endif %}">
+            <i class="fas fa-child mr-3 text-pink-500"></i> Niños
+          </a>
+        </li>
+        <li class="mb-4">
+          <a href="/trabajadoras" class="sidebar-item flex items-center p-3 rounded-xl text-pink-700 hover:text-pink-800 text-lg font-medium {% if active_page == 'trabajadoras' %}active{% endif %}">
+            <i class="fas fa-users mr-3 text-pink-500"></i> Trabajadoras
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <div class="text-center text-pink-500 text-sm">
+    <p>&copy; 2024 Guardería. Todos los derechos reservados.</p>
+  </div>
+</aside>
