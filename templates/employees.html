@@ -1,8 +1,8 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Niños - Guardería{% endblock %}
+{% block title %}Trabajadoras - Guardería{% endblock %}
 
-{% block header_title %}Registro de Niños{% endblock %}
+{% block header_title %}Gestión de Trabajadoras{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -29,50 +29,56 @@
   <!-- Encabezado con botón de agregar -->
   <div class="flex justify-between items-center">
     <h1 class="text-4xl font-extrabold text-pink-700 tracking-tight drop-shadow-sm">
-      Registro de Niños
+      Gestión de Trabajadoras
     </h1>
     <button class="bg-pink-400 hover:bg-pink-500 text-white px-6 py-2 rounded-xl shadow-lg transition-all duration-200 flex items-center space-x-2">
       <i class="fas fa-plus"></i>
-      <span>Agregar Niño</span>
+      <span>Agregar Trabajadora</span>
     </button>
   </div>
 
-  <!-- Tabla de Niños -->
+  <!-- Tabla de Trabajadoras -->
   <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-pink-100">
     <div class="overflow-x-auto">
       <table class="w-full">
         <thead class="bg-pink-50">
           <tr>
             <th class="px-6 py-4 text-left text-pink-600">Nombre</th>
-            <th class="px-6 py-4 text-left text-pink-600">Monto</th>
-            <th class="px-6 py-4 text-left text-pink-600">Representante</th>
+            <th class="px-6 py-4 text-left text-pink-600">Horas</th>
+            <th class="px-6 py-4 text-left text-pink-600">Usuario</th>
+            <th class="px-6 py-4 text-left text-pink-600">Nivel</th>
             <th class="px-6 py-4 text-left text-pink-600">Estado</th>
             <th class="px-6 py-4 text-center text-pink-600">Acciones</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-pink-100">
-          {% if not ninos %}
+          {% if not employees %}
           <tr>
-            <td colspan="4" class="px-6 py-4 text-center text-gray-500">No hay registros para mostrar</td>
+            <td colspan="6" class="px-6 py-4 text-center text-gray-500">No hay registros para mostrar</td>
           </tr>
           {% endif %}
-          {% for nino in ninos %}
-          <tr class="hover:bg-pink-50/50 transition-colors" data-id="{{ nino.id }}" data-status="{{ nino.status if nino.status is not none else 0 }}">
-            <td class="px-6 py-4">{{ nino.nombre }}</td>
-            <td class="px-6 py-4">${{ nino.monto }}</td>
-            <td class="px-6 py-4">{{ nino.representante }}</td>
+          {% for employee in employees %}
+          <tr class="hover:bg-pink-50/50 transition-colors" data-id="{{ employee.id }}" data-status="{{ employee.status if employee.status is not none else 0 }}">
+            <td class="px-6 py-4">{{ employee.nombre }}</td>
+            <td class="px-6 py-4">{{ employee.horas }}</td>
+            <td class="px-6 py-4">{{ employee.usuario }}</td>
             <td class="px-6 py-4">
-                {% if nino.status == 1 %}
+                <span class="px-2 py-1 text-sm font-medium {% if employee.nivel == 'Admin' %}bg-purple-100 text-purple-800{% else %}bg-blue-100 text-blue-800{% endif %} rounded-full">
+                    {{ employee.nivel }}
+                </span>
+            </td>
+            <td class="px-6 py-4">
+                {% if employee.status == 1 %}
                     <span class="px-2 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">Activo</span>
                 {% else %}
                     <span class="px-2 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">Inactivo</span>
                 {% endif %}
             </td>
             <td class="px-6 py-4 text-center space-x-2">
-              <button class="text-blue-500 hover:text-blue-700" onclick="editarNino({{ nino.id }})">
+              <button class="text-blue-500 hover:text-blue-700" onclick="editarEmployee({{ employee.id }})">
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="text-red-500 hover:text-red-700" onclick="eliminarNino({{ nino.id }})">
+              <button class="text-red-500 hover:text-red-700" onclick="eliminarEmployee({{ employee.id }})">
                 <i class="fas fa-trash"></i>
               </button>
             </td>
@@ -84,28 +90,42 @@
   </div>
 </div>
 
-<!-- Modal para añadir/editar niños -->
+<!-- Modal para añadir/editar empleados -->
 <div id="modal" class="modal">
     <div class="bg-white p-6 rounded-2xl shadow-xl w-96 relative">
         <h3 class="text-2xl font-bold text-pink-600 mb-4">
-            <span id="modalTitle">Agregar Niño</span>
+            <span id="modalTitle">Agregar Trabajadora</span>
         </h3>
-        <form id="ninoForm" class="space-y-4">
-            <input type="hidden" id="ninoId">
+        <form id="employeeForm" class="space-y-4">
+            <input type="hidden" id="employeeId">
             <div>
                 <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre</label>
                 <input type="text" id="nombre" name="nombre" required
                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
             </div>
             <div>
-                <label for="monto" class="block text-sm font-medium text-gray-700">Monto</label>
-                <input type="number" id="monto" name="monto" required step="0.01" min="0"
+                <label for="horas" class="block text-sm font-medium text-gray-700">Horas</label>
+                <input type="number" id="horas" name="horas" required min="0"
                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
             </div>
             <div>
-                <label for="representante" class="block text-sm font-medium text-gray-700">Representante</label>
-                <input type="text" id="representante" name="representante" required
+                <label for="usuario" class="block text-sm font-medium text-gray-700">Usuario</label>
+                <input type="text" id="usuario" name="usuario" required
                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+            </div>
+            <div class="password-field">
+                <label for="contrasena" class="block text-sm font-medium text-gray-700">Contraseña</label>
+                <input type="password" id="contrasena" name="contrasena"
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+                <p class="text-sm text-gray-500 mt-1">Dejar en blanco para mantener la contraseña actual al editar</p>
+            </div>
+            <div>
+                <label for="nivel" class="block text-sm font-medium text-gray-700">Nivel</label>
+                <select id="nivel" name="nivel" required
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+                    <option value="Regular">Regular</option>
+                    <option value="Admin">Admin</option>
+                </select>
             </div>
             <div>
                 <label for="status" class="block text-sm font-medium text-gray-700">Estado</label>
@@ -134,14 +154,18 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('modal');
-    const form = document.getElementById('ninoForm');
+    const form = document.getElementById('employeeForm');
     const addButton = document.querySelector('button.bg-pink-400');
+    const passwordField = document.querySelector('.password-field');
 
     // Botón de agregar
     addButton.addEventListener('click', function() {
-        document.getElementById('modalTitle').textContent = 'Agregar Niño';
-        document.getElementById('ninoId').value = '';
+        document.getElementById('modalTitle').textContent = 'Agregar Trabajadora';
+        document.getElementById('employeeId').value = '';
         form.reset();
+        // Mostrar y requerir el campo de contraseña para nuevos registros
+        document.getElementById('contrasena').required = true;
+        passwordField.style.display = 'block';
         modal.classList.add('active');
     });
 
@@ -155,18 +179,25 @@ document.addEventListener('DOMContentLoaded', function() {
     // Manejar el formulario
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const id = document.getElementById('ninoId').value;
+        const id = document.getElementById('employeeId').value;
         const data = {
             nombre: document.getElementById('nombre').value,
-            monto: parseFloat(document.getElementById('monto').value),
-            representante: document.getElementById('representante').value,
-            status: parseInt(document.getElementById('status').value, 10)  // Asegurar que sea número
+            horas: parseInt(document.getElementById('horas').value, 10),
+            usuario: document.getElementById('usuario').value,
+            nivel: document.getElementById('nivel').value,
+            status: parseInt(document.getElementById('status').value, 10)
         };
 
-        console.log('Datos a enviar:', data);  // Para depuración
+        // Solo incluir contraseña si se proporciona una
+        const contrasena = document.getElementById('contrasena').value;
+        if (contrasena) {
+            data.contrasena = contrasena;
+        }
+
+        console.log('Datos a enviar:', data);
 
         try {
-            const response = await fetch(id ? `/api/ninos/${id}` : '/api/ninos', {
+            const response = await fetch(id ? `/api/employees/${id}` : '/api/employees', {
                 method: id ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -176,45 +207,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('Error del servidor:', errorData);
                 throw new Error(errorData.message || 'Error en la respuesta del servidor');
             }
 
             window.location.reload();
         } catch (error) {
-            console.error('Error completo:', error);
+            console.error('Error:', error);
             alert(error.message || 'Error al guardar los datos');
         }
     });
 });
 
-window.editarNino = function(id) {
+window.editarEmployee = function(id) {
     const row = document.querySelector(`tr[data-id="${id}"]`);
     const modal = document.getElementById('modal');
     
-    document.getElementById('modalTitle').textContent = 'Editar Niño';
-    document.getElementById('ninoId').value = id;
+    document.getElementById('modalTitle').textContent = 'Editar Trabajadora';
+    document.getElementById('employeeId').value = id;
     document.getElementById('nombre').value = row.children[0].textContent;
-    document.getElementById('monto').value = row.children[1].textContent.replace('$', '');
-    document.getElementById('representante').value = row.children[2].textContent;
+    document.getElementById('horas').value = row.children[1].textContent;
+    document.getElementById('usuario').value = row.children[2].textContent;
+    document.getElementById('nivel').value = row.children[3].querySelector('span').textContent.trim();
+    document.getElementById('status').value = row.getAttribute('data-status');
     
-    // Obtener el status directamente del data-attribute
-    const status = row.getAttribute('data-status');
-    document.getElementById('status').value = status || '0';
-    
-    // Agregar console.log para depuración
-    console.log('Status obtenido del data-attribute:', status);
+    // La contraseña no es requerida en edición
+    document.getElementById('contrasena').required = false;
+    document.getElementById('contrasena').value = '';
     
     modal.classList.add('active');
 };
 
-window.eliminarNino = async function(id) {
+window.eliminarEmployee = async function(id) {
     if (!confirm('¿Estás seguro de que deseas eliminar este registro?')) {
         return;
     }
 
     try {
-        const response = await fetch(`/api/ninos/${id}`, {
+        const response = await fetch(`/api/employees/${id}`, {
             method: 'DELETE'
         });
 

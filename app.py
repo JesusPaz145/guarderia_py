@@ -1,6 +1,7 @@
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from database import get_ninos, add_nino, update_nino, delete_nino
+from database import (get_ninos, add_nino, update_nino, delete_nino,
+                     get_employees, add_employee, update_employee, delete_employee)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -40,7 +41,8 @@ def crear_nino():
         return jsonify({'error': 'No autorizado'}), 401
     try:
         data = request.json
-        result = add_nino(data['nombre'], data['monto'], data['representante'])
+        status = int(data.get('status', 1))  # Por defecto será 1 (activo) si no se proporciona
+        result = add_nino(data['nombre'], data['monto'], data['representante'], status)
         if result:
             return jsonify(result)
         return jsonify({'error': 'Error al crear el registro'}), 500
@@ -58,7 +60,7 @@ def actualizar_nino(id):
         print(f"Datos recibidos: {data}")
         
         # Validar datos
-        if not all(key in data for key in ['nombre', 'monto', 'representante']):
+        if not all(key in data for key in ['nombre', 'monto', 'representante', 'status']):
             return jsonify({'error': 'Faltan campos requeridos'}), 400
         
         try:
@@ -66,7 +68,7 @@ def actualizar_nino(id):
         except ValueError:
             return jsonify({'error': 'El monto debe ser un número válido'}), 400
             
-        result = update_nino(id, data['nombre'], monto, data['representante'])
+        result = update_nino(id, data['nombre'], monto, data['representante'], data['status'])
         print(f"Resultado de la actualización: {result}")
         
         if result:
@@ -91,6 +93,77 @@ def eliminar_nino(id):
         print(f"Error al eliminar niño: {e}")
         return jsonify({'error': str(e)}), 500
     return render_template('ninos.html', active_page='ninos')
+
+@app.route('/employees')
+def employees():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    print("Obteniendo lista de empleados...")
+    employees_list = get_employees()
+    print(f"Lista de empleados obtenida: {employees_list}")
+    return render_template('employees.html', active_page='employees', employees=employees_list)
+
+@app.route('/api/employees', methods=['POST'])
+def crear_employee():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        status = int(data.get('status', 1))
+        result = add_employee(
+            data['nombre'], 
+            data['horas'], 
+            data['usuario'], 
+            data.get('contrasena', ''),  # La contraseña es opcional en actualizaciones
+            data['nivel'],
+            status
+        )
+        if result:
+            return jsonify(result)
+        return jsonify({'error': 'Error al crear el registro'}), 500
+    except Exception as e:
+        print(f"Error al crear empleado: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employees/<int:id>', methods=['PUT'])
+def actualizar_employee(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        print(f"Datos recibidos: {data}")
+        
+        if not all(key in data for key in ['nombre', 'horas', 'usuario', 'nivel', 'status']):
+            return jsonify({'error': 'Faltan campos requeridos'}), 400
+            
+        result = update_employee(
+            id,
+            data['nombre'],
+            data['horas'],
+            data['usuario'],
+            data['nivel'],
+            data['status']
+        )
+        
+        if result:
+            return jsonify(result)
+        return jsonify({'error': 'Error al actualizar el registro'}), 500
+    except Exception as e:
+        print(f"Error al actualizar empleado: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employees/<int:id>', methods=['DELETE'])
+def eliminar_employee(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        result = delete_employee(id)
+        if result:
+            return jsonify({'success': True})
+        return jsonify({'error': 'Error al eliminar el registro'}), 500
+    except Exception as e:
+        print(f"Error al eliminar empleado: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['GET', 'POST'])
 def logout():

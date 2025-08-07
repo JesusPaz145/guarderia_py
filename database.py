@@ -23,37 +23,30 @@ def get_ninos():
     """Obtener todos los niños de la base de datos"""
     try:
         print("\n=== Iniciando obtención de niños ===")
-        print(f"URL de Supabase: {supabase_url}")
         
         # Consulta simple usando el cliente
         print("\nEjecutando consulta...")
-        response = supabase.from_('ninos').select('id,nombre,monto,"Representante"').execute()
+        response = supabase.from_('ninos').select('*').execute()
         print(f"Respuesta completa: {response}")
         
         if hasattr(response, 'data'):
+            print(f"Datos obtenidos: {response.data}")
             # Convertir los datos para manejar la columna Representante
             data_converted = []
             for item in response.data:
-                print(f"Item original: {item}")
                 converted = {
                     'id': item['id'],
                     'nombre': item['nombre'],
-                    'monto': item['monto'],
-                    'representante': item['Representante']  # Convertir a minúscula para el template
+                    'monto': int(float(item.get('monto', 0))),
+                    'representante': item.get('Representante', ''),
+                    'status': int(item.get('status', 0))
                 }
                 data_converted.append(converted)
-            print(f"Datos convertidos: {data_converted}")
-            return data_converted
-            print(f"\nDatos en bruto: {response.data}")
-            # Convertir Representante a representante en los datos
-            data_converted = []
-            for item in response.data:
-                print(f"Procesando item: {item}")
-                new_item = item.copy()
-                if 'Representante' in new_item:
-                    new_item['representante'] = new_item.pop('Representante')
-                data_converted.append(new_item)
-            print(f"\nDatos convertidos: {data_converted}")
+            
+            # Ordenar la lista: primero por status (descendente) y luego por nombre
+            data_converted.sort(key=lambda x: (-x['status'], x['nombre']))
+            
+            print(f"Datos convertidos y ordenados: {data_converted}")
             return data_converted
         else:
             print("No se encontraron datos")
@@ -65,23 +58,28 @@ def get_ninos():
         # Intentar con el método alternativo
         try:
             print("\nIntentando método alternativo...")
-            response = supabase.table('ninos').select('id,nombre,monto,"Representante"').execute()
+            response = supabase.table('ninos').select('*').execute()
             print(f"Respuesta del método alternativo: {response}")
             
             if hasattr(response, 'data'):
+                # Usar la misma lógica que en el método principal
                 data_converted = []
                 for item in response.data:
-                    new_item = item.copy()
-                    if 'Representante' in new_item:
-                        new_item['representante'] = new_item.pop('Representante')
-                    data_converted.append(new_item)
+                    converted = {
+                        'id': item['id'],
+                        'nombre': item['nombre'],
+                        'monto': int(float(item.get('monto', 0))),
+                        'representante': item.get('Representante', ''),
+                        'status': int(item.get('status', 0))
+                    }
+                    data_converted.append(converted)
+                
+                # Ordenar la lista: primero por status (descendente) y luego por nombre
+                data_converted.sort(key=lambda x: (-x['status'], x['nombre']))
                 return data_converted
             return []
         except Exception as e2:
             print(f"Error en método alternativo: {e2}")
-            return []
-        else:
-            print("La respuesta no tiene el atributo 'data'")
             return []
     except Exception as e:
         print(f"Error al obtener niños: {e}")
@@ -89,13 +87,19 @@ def get_ninos():
         print(f"Tipo de error: {type(e)}")
         return []
 
-def add_nino(nombre, monto, representante):
+def add_nino(nombre, monto, representante, status=1):
     """Agregar un nuevo niño a la base de datos"""
     try:
+        # Convertir status a número si viene como string
+        status = 1 if str(status).lower() in ['1', 'true', 'activo'] else 0
+        # Convertir monto a entero
+        monto = int(float(monto))
+        
         data = {
             "nombre": nombre,
             "monto": monto,
-            "Representante": representante  # Nota la R mayúscula
+            "Representante": representante,  # Nota la R mayúscula
+            "status": status  # Ahora siempre será 0 o 1
         }
         response = supabase.table('ninos').insert(data).execute()
         return response.data[0] if response.data else None
@@ -103,7 +107,7 @@ def add_nino(nombre, monto, representante):
         print(f"Error al agregar niño: {e}")
         return None
 
-def update_nino(id, nombre, monto, representante):
+def update_nino(id, nombre, monto, representante, status):
     """Actualizar datos de un niño"""
     try:
         print(f"\n=== Iniciando actualización de niño {id} ===")
@@ -116,11 +120,15 @@ def update_nino(id, nombre, monto, representante):
         if not check.data:
             print(f"No se encontró el niño con ID {id}")
             return None
+        
+        # Convertir monto a entero
+        monto = int(float(monto))
             
         data = {
             "nombre": nombre,
             "monto": monto,
-            "Representante": representante  # Nota la R mayúscula
+            "Representante": representante,  # Nota la R mayúscula
+            "status": status
         }
         print(f"Datos a actualizar: {data}")
         
@@ -156,4 +164,112 @@ def delete_nino(id):
         return True
     except Exception as e:
         print(f"Error al eliminar niño: {e}")
+        return False
+
+def get_employees():
+    """Obtener todos los empleados de la base de datos"""
+    try:
+        print("\n=== Iniciando obtención de empleados ===")
+        
+        # Consulta simple usando el cliente
+        print("\nEjecutando consulta...")
+        response = supabase.from_('employees').select('*').execute()
+        print(f"Respuesta completa: {response}")
+        
+        if hasattr(response, 'data'):
+            print(f"Datos obtenidos: {response.data}")
+            data_converted = []
+            for item in response.data:
+                # Imprimir cada item para debug
+                print(f"Procesando item: {item}")
+                # Convertir todo a minúsculas para manejar posibles diferencias en nombres de columnas
+                item_lower = {k.lower(): v for k, v in item.items()}
+                converted = {
+                    'id': item_lower.get('id'),
+                    'nombre': item_lower.get('nombre', ''),
+                    'horas': int(float(item_lower.get('horas', 0))),
+                    'usuario': item_lower.get('usuario', ''),
+                    'nivel': item_lower.get('nivel', 'Regular'),
+                    'status': int(item_lower.get('status', 0))
+                }
+                data_converted.append(converted)
+            
+            # Ordenar la lista: primero por status (descendente) y luego por nombre
+            data_converted.sort(key=lambda x: (-x['status'], x['nombre']))
+            
+            print(f"Datos convertidos y ordenados: {data_converted}")
+            return data_converted
+        else:
+            print("No se encontraron datos")
+            return []
+    except Exception as e:
+        print(f"Error al obtener empleados: {e}")
+        return []
+
+def add_employee(nombre, horas, usuario, contrasena, nivel, status=1):
+    """Agregar un nuevo empleado a la base de datos"""
+    try:
+        # Validaciones
+        if nivel not in ['Admin', 'Regular']:
+            raise ValueError("El nivel debe ser 'Admin' o 'Regular'")
+        
+        # Convertir status a número
+        status = 1 if str(status).lower() in ['1', 'true', 'activo'] else 0
+        # Convertir horas a entero
+        horas = int(float(horas))
+        
+        data = {
+            "nombre": nombre,
+            "horas": horas,
+            "usuario": usuario,
+            "contrasena": contrasena,
+            "nivel": nivel,
+            "status": status
+        }
+        response = supabase.table('employees').insert(data).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error al agregar empleado: {e}")
+        return None
+
+def update_employee(id, nombre, horas, usuario, nivel, status):
+    """Actualizar datos de un empleado"""
+    try:
+        print(f"\n=== Iniciando actualización de empleado {id} ===")
+        
+        # Validaciones
+        if nivel not in ['Admin', 'Regular']:
+            raise ValueError("El nivel debe ser 'Admin' o 'Regular'")
+        
+        # Convertir horas a entero
+        horas = int(float(horas))
+        # Convertir status a número
+        status = int(status)
+            
+        data = {
+            "nombre": nombre,
+            "horas": horas,
+            "usuario": usuario,
+            "nivel": nivel,
+            "status": status
+        }
+        print(f"Datos a actualizar: {data}")
+        
+        response = supabase.from_('employees').update(data).eq('id', id).execute()
+        print(f"Respuesta de Supabase: {response}")
+        
+        if hasattr(response, 'data') and response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Error al actualizar empleado: {e}")
+        return None
+
+def delete_employee(id):
+    """Eliminar un empleado de la base de datos"""
+    try:
+        response = supabase.table('employees').delete().eq('id', id).execute()
+        return True
+    except Exception as e:
+        print(f"Error al eliminar empleado: {e}")
         return False
