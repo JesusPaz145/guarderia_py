@@ -273,3 +273,287 @@ def delete_employee(id):
     except Exception as e:
         print(f"Error al eliminar empleado: {e}")
         return False
+
+def get_active_employees_count():
+    """Obtener el número de empleados activos (status = 1)"""
+    try:
+        print("\n=== Obteniendo conteo de empleados activos ===")
+        
+        # Consulta para contar empleados con status = 1
+        response = supabase.from_('employees').select('*', count='exact').eq('status', 1).execute()
+        print(f"Respuesta de conteo: {response}")
+        
+        if hasattr(response, 'count'):
+            print(f"Número de empleados activos: {response.count}")
+            return response.count
+        else:
+            # Fallback: contar manualmente
+            response = supabase.from_('employees').select('*').eq('status', 1).execute()
+            if hasattr(response, 'data'):
+                count = len(response.data)
+                print(f"Número de empleados activos (fallback): {count}")
+                return count
+            return 0
+    except Exception as e:
+        print(f"Error al obtener conteo de empleados activos: {e}")
+        return 0
+
+def get_active_ninos():
+    """Obtener solo los niños activos (status = 1)"""
+    try:
+        print("\n=== Obteniendo niños activos ===")
+        response = supabase.from_('ninos').select('*').eq('status', 1).execute()
+        
+        if hasattr(response, 'data'):
+            data_converted = []
+            for item in response.data:
+                converted = {
+                    'id': item['id'],
+                    'nombre': item['nombre'],
+                    'monto': int(float(item.get('monto', 0))),
+                    'representante': item.get('Representante', ''),
+                    'status': int(item.get('status', 0))
+                }
+                data_converted.append(converted)
+            
+            # Ordenar por nombre
+            data_converted.sort(key=lambda x: x['nombre'])
+            return data_converted
+        return []
+    except Exception as e:
+        print(f"Error al obtener niños activos: {e}")
+        return []
+
+def get_active_employees():
+    """Obtener solo los empleados activos (status = 1)"""
+    try:
+        print("\n=== Obteniendo empleados activos ===")
+        response = supabase.from_('employees').select('*').eq('status', 1).execute()
+        
+        if hasattr(response, 'data'):
+            data_converted = []
+            for item in response.data:
+                item_lower = {k.lower(): v for k, v in item.items()}
+                converted = {
+                    'id': item_lower.get('id'),
+                    'nombre': item_lower.get('nombre', ''),
+                    'horas': int(float(item_lower.get('horas', 0))),
+                    'usuario': item_lower.get('usuario', ''),
+                    'nivel': item_lower.get('nivel', 'Regular'),
+                    'status': int(item_lower.get('status', 0))
+                }
+                data_converted.append(converted)
+            
+            # Ordenar por nombre
+            data_converted.sort(key=lambda x: x['nombre'])
+            return data_converted
+        return []
+    except Exception as e:
+        print(f"Error al obtener empleados activos: {e}")
+        return []
+
+def add_asistencia(fecha, tipo, id_persona, valor):
+    """Agregar un nuevo registro de asistencia"""
+    try:
+        print(f"\n=== Agregando asistencia ===")
+        print(f"Fecha: {fecha}, Tipo: {tipo}, ID Persona: {id_persona}, Valor: {valor}")
+        
+        data = {
+            "fecha": fecha,
+            "tipo": tipo,
+            "id_persona": id_persona,
+            "valor": valor
+        }
+        
+        response = supabase.table('asistencia').insert(data).execute()
+        if response.data:
+            print(f"Asistencia agregada exitosamente: {response.data[0]}")
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Error al agregar asistencia: {e}")
+        return None
+
+def get_today_ninos_total():
+    """Obtener la suma total de montos de niños para hoy"""
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        
+        print(f"\n=== Obteniendo total de niños para hoy ({today}) ===")
+        
+        response = supabase.from_('asistencia').select('valor').eq('fecha', today).eq('tipo', 'nino').execute()
+        
+        if hasattr(response, 'data'):
+            total = sum(float(item['valor']) for item in response.data)
+            print(f"Total de niños para hoy: ${total}")
+            return total
+        return 0
+    except Exception as e:
+        print(f"Error al obtener total de niños para hoy: {e}")
+        return 0
+
+def get_today_payment_per_hour():
+    """Obtener el pago por hora de hoy (total niños / total horas trabajadoras)"""
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        
+        print(f"\n=== Calculando pago por hora para hoy ({today}) ===")
+        
+        # Obtener total de niños
+        ninos_response = supabase.from_('asistencia').select('valor').eq('fecha', today).eq('tipo', 'nino').execute()
+        total_ninos = 0
+        if hasattr(ninos_response, 'data'):
+            total_ninos = sum(float(item['valor']) for item in ninos_response.data)
+        
+        # Obtener total de horas trabajadoras
+        trabajadoras_response = supabase.from_('asistencia').select('valor').eq('fecha', today).eq('tipo', 'trabajadora').execute()
+        total_horas = 0
+        if hasattr(trabajadoras_response, 'data'):
+            total_horas = sum(float(item['valor']) for item in trabajadoras_response.data)
+        
+        # Calcular pago por hora
+        if total_horas > 0:
+            payment_per_hour = total_ninos / total_horas
+            print(f"Total niños: ${total_ninos}, Total horas: {total_horas}, Pago por hora: ${payment_per_hour:.2f}")
+            return round(payment_per_hour, 2)
+        else:
+            print("No hay horas registradas para hoy")
+            return 0
+    except Exception as e:
+        print(f"Error al calcular pago por hora: {e}")
+        return 0
+
+def get_today_ninos_asistencia():
+    """Obtener asistencia de niños para hoy con información del niño"""
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        
+        print(f"\n=== Obteniendo asistencia de niños para hoy ({today}) ===")
+        
+        # Primero obtener los registros de asistencia
+        response = supabase.from_('asistencia').select('*').eq('fecha', today).eq('tipo', 'nino').execute()
+        
+        if hasattr(response, 'data') and response.data:
+            data_converted = []
+            total_monto = 0
+            for item in response.data:
+                # Obtener el nombre del niño usando el id_persona
+                try:
+                    nino_response = supabase.from_('ninos').select('nombre').eq('id', item['id_persona']).execute()
+                    nombre = 'N/A'
+                    if hasattr(nino_response, 'data') and nino_response.data:
+                        nombre = nino_response.data[0]['nombre']
+                    
+                    valor = float(item['valor'])
+                    total_monto += valor
+                    
+                    converted = {
+                        'id': item['id'],
+                        'id_persona': item['id_persona'],
+                        'valor': valor,
+                        'fecha': item['fecha'],
+                        'tipo': item['tipo'],
+                        'nombre': nombre
+                    }
+                    data_converted.append(converted)
+                except Exception as e:
+                    print(f"Error al obtener nombre del niño {item['id_persona']}: {e}")
+                    continue
+            
+            # Ordenar por nombre
+            data_converted.sort(key=lambda x: x['nombre'])
+            print(f"Asistencia de niños obtenida: {data_converted}")
+            print(f"Total monto niños: ${total_monto}")
+            return data_converted, total_monto
+        else:
+            print("No se encontraron registros de asistencia de niños para hoy")
+            return [], 0
+    except Exception as e:
+        print(f"Error al obtener asistencia de niños: {e}")
+        return [], 0
+
+def get_today_employees_asistencia():
+    """Obtener asistencia de empleados para hoy con información del empleado"""
+    try:
+        from datetime import date
+        today = date.today().isoformat()
+        
+        print(f"\n=== Obteniendo asistencia de empleados para hoy ({today}) ===")
+        
+        # Primero obtener los registros de asistencia
+        response = supabase.from_('asistencia').select('*').eq('fecha', today).eq('tipo', 'trabajadora').execute()
+        
+        if hasattr(response, 'data') and response.data:
+            data_converted = []
+            total_horas = 0
+            for item in response.data:
+                # Obtener el nombre del empleado usando el id_persona
+                try:
+                    employee_response = supabase.from_('employees').select('nombre').eq('id', item['id_persona']).execute()
+                    nombre = 'N/A'
+                    if hasattr(employee_response, 'data') and employee_response.data:
+                        nombre = employee_response.data[0]['nombre']
+                    
+                    valor = float(item['valor'])
+                    total_horas += valor
+                    
+                    converted = {
+                        'id': item['id'],
+                        'id_persona': item['id_persona'],
+                        'valor': valor,
+                        'fecha': item['fecha'],
+                        'tipo': item['tipo'],
+                        'nombre': nombre
+                    }
+                    data_converted.append(converted)
+                except Exception as e:
+                    print(f"Error al obtener nombre del empleado {item['id_persona']}: {e}")
+                    continue
+            
+            # Ordenar por nombre
+            data_converted.sort(key=lambda x: x['nombre'])
+            print(f"Asistencia de empleados obtenida: {data_converted}")
+            print(f"Total horas empleados: {total_horas}")
+            return data_converted, total_horas
+        else:
+            print("No se encontraron registros de asistencia de empleados para hoy")
+            return [], 0
+    except Exception as e:
+        print(f"Error al obtener asistencia de empleados: {e}")
+        return [], 0
+
+def update_asistencia(id, valor):
+    """Actualizar el valor de un registro de asistencia"""
+    try:
+        print(f"\n=== Actualizando asistencia {id} ===")
+        print(f"Nuevo valor: {valor}")
+        
+        data = {
+            "valor": valor
+        }
+        
+        response = supabase.from_('asistencia').update(data).eq('id', id).execute()
+        
+        if hasattr(response, 'data') and response.data:
+            print(f"Asistencia actualizada exitosamente: {response.data[0]}")
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Error al actualizar asistencia: {e}")
+        return None
+
+def delete_asistencia(id):
+    """Eliminar un registro de asistencia"""
+    try:
+        print(f"\n=== Eliminando asistencia {id} ===")
+        
+        response = supabase.from_('asistencia').delete().eq('id', id).execute()
+        
+        print(f"Asistencia eliminada exitosamente")
+        return True
+    except Exception as e:
+        print(f"Error al eliminar asistencia: {e}")
+        return False

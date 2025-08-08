@@ -1,7 +1,11 @@
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from database import (get_ninos, add_nino, update_nino, delete_nino,
-                     get_employees, add_employee, update_employee, delete_employee)
+                     get_employees, add_employee, update_employee, delete_employee,
+                     get_active_employees_count, get_active_ninos, get_active_employees,
+                     add_asistencia, get_today_ninos_total, get_today_payment_per_hour,
+                     get_today_ninos_asistencia, get_today_employees_asistencia,
+                     update_asistencia, delete_asistencia)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -24,7 +28,19 @@ def login():
 def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return render_template('dashboard.html', active_page='dashboard')
+    
+    # Obtener el número de empleados activos
+    active_employees_count = get_active_employees_count()
+    
+    # Obtener datos dinámicos para hoy
+    today_ninos_total = get_today_ninos_total()
+    today_payment_per_hour = get_today_payment_per_hour()
+    
+    return render_template('dashboard.html', 
+                         active_page='dashboard',
+                         active_employees_count=active_employees_count,
+                         today_ninos_total=today_ninos_total,
+                         today_payment_per_hour=today_payment_per_hour)
 
 @app.route('/ninos')
 def ninos():
@@ -163,6 +179,102 @@ def eliminar_employee(id):
         return jsonify({'error': 'Error al eliminar el registro'}), 500
     except Exception as e:
         print(f"Error al eliminar empleado: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ninos-activos')
+def get_ninos_activos():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        ninos = get_active_ninos()
+        return jsonify(ninos)
+    except Exception as e:
+        print(f"Error al obtener niños activos: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/employees-activos')
+def get_employees_activos():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        employees = get_active_employees()
+        return jsonify(employees)
+    except Exception as e:
+        print(f"Error al obtener empleados activos: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/hoy')
+def hoy():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Obtener datos de asistencia para hoy
+    ninos_asistencia, total_ninos = get_today_ninos_asistencia()
+    employees_asistencia, total_horas = get_today_employees_asistencia()
+    
+    # Calcular pago por hora
+    pago_por_hora = 0
+    if total_horas > 0:
+        pago_por_hora = total_ninos / total_horas
+    
+    print(f"DEBUG - ninos_asistencia: {ninos_asistencia}")
+    print(f"DEBUG - employees_asistencia: {employees_asistencia}")
+    print(f"DEBUG - total_ninos: ${total_ninos}")
+    print(f"DEBUG - total_horas: {total_horas}")
+    print(f"DEBUG - pago_por_hora: ${pago_por_hora}")
+    
+    return render_template('hoy.html', 
+                         active_page='hoy',
+                         ninos_asistencia=ninos_asistencia,
+                         employees_asistencia=employees_asistencia,
+                         total_ninos=total_ninos,
+                         total_horas=total_horas,
+                         pago_por_hora=pago_por_hora)
+
+@app.route('/api/asistencia', methods=['POST'])
+def crear_asistencia():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        result = add_asistencia(
+            data['fecha'],
+            data['tipo'],
+            data['id_persona'],
+            data['valor']
+        )
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al crear el registro de asistencia'}), 500
+    except Exception as e:
+        print(f"Error al crear asistencia: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/asistencia/<int:id>', methods=['PUT'])
+def actualizar_asistencia(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        result = update_asistencia(id, data['valor'])
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al actualizar el registro de asistencia'}), 500
+    except Exception as e:
+        print(f"Error al actualizar asistencia: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/asistencia/<int:id>', methods=['DELETE'])
+def eliminar_asistencia(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        result = delete_asistencia(id)
+        if result:
+            return jsonify({'success': True})
+        return jsonify({'error': 'Error al eliminar el registro de asistencia'}), 500
+    except Exception as e:
+        print(f"Error al eliminar asistencia: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['GET', 'POST'])
