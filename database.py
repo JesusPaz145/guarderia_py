@@ -1,6 +1,9 @@
+# database.py - Archivo completo y corregido (Versión con más Debug)
+
 from supabase import create_client
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timedelta # Asegúrate de que esta línea esté aquí al principio
 
 # Cargar variables de entorno
 load_dotenv()
@@ -10,7 +13,7 @@ supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_KEY")
 
 print(f"URL de Supabase: {supabase_url}")
-print(f"Key de Supabase: {supabase_key[:10]}...")  # Solo mostramos el inicio de la key por seguridad
+print(f"Key de Supabase: {supabase_key[:10]}...") # Solo mostramos el inicio de la key por seguridad
 
 # Crear cliente de Supabase
 try:
@@ -81,7 +84,7 @@ def get_ninos():
         except Exception as e2:
             print(f"Error en método alternativo: {e2}")
             return []
-    except Exception as e:
+    except Exception as e: # Este catch es redundante si el anterior ya captura todo
         print(f"Error al obtener niños: {e}")
         print(f"Error completo: {str(e)}")
         print(f"Tipo de error: {type(e)}")
@@ -98,8 +101,8 @@ def add_nino(nombre, monto, representante, status=1):
         data = {
             "nombre": nombre,
             "monto": monto,
-            "Representante": representante,  # Nota la R mayúscula
-            "status": status  # Ahora siempre será 0 o 1
+            "Representante": representante, # Nota la R mayúscula
+            "status": status # Ahora siempre será 0 o 1
         }
         response = supabase.table('ninos').insert(data).execute()
         return response.data[0] if response.data else None
@@ -127,12 +130,11 @@ def update_nino(id, nombre, monto, representante, status):
         data = {
             "nombre": nombre,
             "monto": monto,
-            "Representante": representante,  # Nota la R mayúscula
+            "Representante": representante, # Nota la R mayúscula
             "status": status
         }
         print(f"Datos a actualizar: {data}")
         
-        # Intentar actualización usando from_ en lugar de table
         response = supabase.from_('ninos').update(data).eq('id', id).execute()
         print(f"Respuesta de Supabase: {response}")
         
@@ -377,8 +379,7 @@ def add_asistencia(fecha, tipo, id_persona, valor):
 def get_today_ninos_total():
     """Obtener la suma total de montos de niños para hoy"""
     try:
-        from datetime import date
-        today = date.today().isoformat()
+        today = datetime.now().date().isoformat() # Usar datetime.now().date()
         
         print(f"\n=== Obteniendo total de niños para hoy ({today}) ===")
         
@@ -396,8 +397,7 @@ def get_today_ninos_total():
 def get_today_payment_per_hour():
     """Obtener el pago por hora de hoy (total niños / total horas trabajadoras)"""
     try:
-        from datetime import date
-        today = date.today().isoformat()
+        today = datetime.now().date().isoformat() # Usar datetime.now().date()
         
         print(f"\n=== Calculando pago por hora para hoy ({today}) ===")
         
@@ -425,16 +425,13 @@ def get_today_payment_per_hour():
         print(f"Error al calcular pago por hora: {e}")
         return 0
 
-def get_today_ninos_asistencia():
-    """Obtener asistencia de niños para hoy con información del niño"""
+def get_date_ninos_asistencia(target_date):
+    """Obtener asistencia de niños para una fecha específica con información del niño"""
     try:
-        from datetime import date
-        today = date.today().isoformat()
-        
-        print(f"\n=== Obteniendo asistencia de niños para hoy ({today}) ===")
+        print(f"\n=== Obteniendo asistencia de niños para {target_date} ===")
         
         # Primero obtener los registros de asistencia
-        response = supabase.from_('asistencia').select('*').eq('fecha', today).eq('tipo', 'nino').execute()
+        response = supabase.from_('asistencia').select('*').eq('fecha', target_date).eq('tipo', 'nino').execute()
         
         if hasattr(response, 'data') and response.data:
             data_converted = []
@@ -469,22 +466,27 @@ def get_today_ninos_asistencia():
             print(f"Total monto niños: ${total_monto}")
             return data_converted, total_monto
         else:
-            print("No se encontraron registros de asistencia de niños para hoy")
+            print(f"No se encontraron registros de asistencia de niños para {target_date}")
             return [], 0
     except Exception as e:
         print(f"Error al obtener asistencia de niños: {e}")
         return [], 0
+# DEBUG LINE: get_date_ninos_asistencia function is loaded.
 
-def get_today_employees_asistencia():
-    """Obtener asistencia de empleados para hoy con información del empleado"""
+def get_today_ninos_asistencia(): # ESTA ES LA FUNCIÓN QUE SE SUGIRIÓ EN EL ERROR ANTERIOR
+    """Obtener asistencia de niños para hoy con información del niño"""
+    # Esta función debería estar llamando a get_date_ninos_asistencia con la fecha de hoy
+    # Para evitar duplicación de lógica, haremos que llame a la función general
+    return get_date_ninos_asistencia(datetime.now().date().isoformat())
+
+
+def get_date_employees_asistencia(target_date):
+    """Obtener asistencia de empleados para una fecha específica con información del empleado"""
     try:
-        from datetime import date
-        today = date.today().isoformat()
-        
-        print(f"\n=== Obteniendo asistencia de empleados para hoy ({today}) ===")
+        print(f"\n=== Obteniendo asistencia de empleados para {target_date} ===")
         
         # Primero obtener los registros de asistencia
-        response = supabase.from_('asistencia').select('*').eq('fecha', today).eq('tipo', 'trabajadora').execute()
+        response = supabase.from_('asistencia').select('*').eq('fecha', target_date).eq('tipo', 'trabajadora').execute()
         
         if hasattr(response, 'data') and response.data:
             data_converted = []
@@ -519,11 +521,18 @@ def get_today_employees_asistencia():
             print(f"Total horas empleados: {total_horas}")
             return data_converted, total_horas
         else:
-            print("No se encontraron registros de asistencia de empleados para hoy")
+            print(f"No se encontraron registros de asistencia de empleados para {target_date}")
             return [], 0
     except Exception as e:
         print(f"Error al obtener asistencia de empleados: {e}")
         return [], 0
+
+def get_today_employees_asistencia(): # ESTA ES LA FUNCIÓN QUE SE SUGIRIÓ EN EL ERROR ANTERIOR
+    """Obtener asistencia de empleados para hoy con información del empleado"""
+    # Esta función debería estar llamando a get_date_employees_asistencia con la fecha de hoy
+    # Para evitar duplicación de lógica, haremos que llame a la función general
+    return get_date_employees_asistencia(datetime.now().date().isoformat())
+
 
 def update_asistencia(id, valor):
     """Actualizar el valor de un registro de asistencia"""
@@ -557,3 +566,268 @@ def delete_asistencia(id):
     except Exception as e:
         print(f"Error al eliminar asistencia: {e}")
         return False
+
+def get_week_ninos_unique_count():
+    """Obtener el número de niños únicos que han asistido en la semana actual"""
+    try:
+        #today = date.today() # Eliminada
+        today = datetime.now().date()
+        
+        # Calcular el inicio de la semana (lunes)
+        # weekday() devuelve 0=lunes, 1=martes, ..., 6=domingo
+        days_since_monday = today.weekday()
+        start_of_week = today - timedelta(days=days_since_monday)
+        
+        print(f"\n=== Obteniendo niños únicos de la semana ===")
+        print(f"Fecha actual: {today}")
+        print(f"Inicio de semana (lunes): {start_of_week}")
+        
+        # Obtener todos los registros de asistencia de niños desde el lunes hasta hoy
+        response = supabase.from_('asistencia').select('id_persona').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', today.isoformat()).execute()
+        
+        if hasattr(response, 'data') and response.data:
+            # Obtener IDs únicos de niños
+            unique_ninos_ids = set()
+            for item in response.data:
+                unique_ninos_ids.add(item['id_persona'])
+            
+            count = len(unique_ninos_ids)
+            print(f"Niños únicos en la semana: {count}")
+            print(f"IDs únicos: {unique_ninos_ids}")
+            return count
+        else:
+            print("No se encontraron registros de asistencia de niños en la semana")
+            return 0
+    except Exception as e:
+        print(f"Error al obtener conteo de niños únicos de la semana: {e}")
+        return 0
+
+def get_week_ninos_total():
+    """Obtener la suma total de montos de niños para la semana actual"""
+    try:
+        #today = date.today() # Eliminada
+        today = datetime.now().date()
+        
+        # Calcular el inicio de la semana (lunes)
+        days_since_monday = today.weekday()
+        start_of_week = today - timedelta(days=days_since_monday)
+        
+        print(f"\n=== Obteniendo total de niños de la semana ===")
+        print(f"Fecha actual: {today}")
+        print(f"Inicio de semana (lunes): {start_of_week}")
+        
+        # Obtener todos los registros de asistencia de niños desde el lunes hasta hoy
+        response = supabase.from_('asistencia').select('valor').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', today.isoformat()).execute()
+        
+        if hasattr(response, 'data') and response.data:
+            total = sum(float(item['valor']) for item in response.data)
+            print(f"Total de niños de la semana: ${total}")
+            return total
+        else:
+            print("No se encontraron registros de asistencia de niños en la semana")
+            return 0
+    except Exception as e:
+        print(f"Error al obtener total de niños de la semana: {e}")
+        return 0
+
+
+def get_week_daily_amounts():
+    """Obtener los montos diarios de la semana actual (lunes a domingo) de manera eficiente.
+    Esto incluye los nombres de niños y trabajadoras que asistieron ese día.
+    """
+    try:
+        today = datetime.now().date()
+        # weekday() devuelve 0 para lunes, 6 para domingo.
+        # Restamos los días desde el lunes para obtener el inicio de la semana actual.
+        start_of_week = today - timedelta(days=today.weekday())
+        end_of_week_query = start_of_week + timedelta(days=6) # Rango hasta el domingo
+
+        print(f"\n--- DEBUG get_week_daily_amounts ---")
+        print(f"Fecha actual: {today.isoformat()}")
+        print(f"Inicio de semana (Lunes): {start_of_week.isoformat()}")
+        print(f"Fin de semana para consulta (Domingo): {end_of_week_query.isoformat()}")
+
+        # Crear una estructura para los 7 días de la semana, inicializando los montos a 0
+        # y las listas de nombres vacías.
+        week_data = {
+            (start_of_week + timedelta(days=i)).isoformat(): {
+                'day': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][i],
+                'date': (start_of_week + timedelta(days=i)).isoformat(), # Añadir la fecha aquí también
+                'amount': 0,
+                'ninos': [],
+                'trabajadoras': []
+            }
+            for i in range(7)
+        }
+        print(f"Estructura week_data inicializada: {week_data}")
+
+        # 1. Obtener todos los registros de asistencia de niños para la semana en una sola consulta.
+        # El rango de fechas va desde el lunes de la semana actual hasta el domingo de la semana actual.
+        ninos_asistencia_response = supabase.from_('asistencia').select('fecha, valor, id_persona').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week_query.isoformat()).execute()
+        
+        print(f"Respuesta cruda de asistencia de niños: {ninos_asistencia_response}")
+
+        # 2. Obtener los nombres de todos los niños que asistieron en la semana en una sola consulta.
+        nino_names_map = {}
+        if hasattr(ninos_asistencia_response, 'data') and ninos_asistencia_response.data:
+            nino_ids = list(set(item['id_persona'] for item in ninos_asistencia_response.data)) # Obtener IDs únicos
+            print(f"IDs de niños con asistencia esta semana: {nino_ids}")
+            if nino_ids: # Solo consultar si hay IDs
+                ninos_data_response = supabase.from_('ninos').select('id, nombre').in_('id', nino_ids).execute()
+                if hasattr(ninos_data_response, 'data'):
+                    nino_names_map = {item['id']: item['nombre'] for item in ninos_data_response.data}
+                    print(f"Mapa de nombres de niños: {nino_names_map}")
+            
+            # Procesar los datos de asistencia de niños y agregarlos a week_data
+            for item in ninos_asistencia_response.data:
+                fecha = item['fecha']
+                valor = float(item['valor'])
+                id_persona = item['id_persona']
+                
+                print(f"Procesando asistencia de niño: Fecha={fecha}, Valor={valor}, ID_Persona={id_persona}")
+                
+                if fecha in week_data:
+                    week_data[fecha]['amount'] += valor
+                    # Añadir nombre del niño si existe, si no, 'Desconocido'
+                    week_data[fecha]['ninos'].append(nino_names_map.get(id_persona, 'Desconocido'))
+
+        # 3. Obtener todos los registros de asistencia de trabajadoras para la semana en una sola consulta.
+        employees_asistencia_response = supabase.from_('asistencia').select('fecha, id_persona').eq('tipo', 'trabajadora').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week_query.isoformat()).execute()
+        
+        print(f"Respuesta cruda de asistencia de trabajadoras: {employees_asistencia_response}")
+
+        # 4. Obtener los nombres de todas las trabajadoras que asistieron en la semana en una sola consulta.
+        employee_names_map = {}
+        if hasattr(employees_asistencia_response, 'data') and employees_asistencia_response.data:
+            employee_ids = list(set(item['id_persona'] for item in employees_asistencia_response.data)) # Obtener IDs únicos
+            print(f"IDs de trabajadoras con asistencia esta semana: {employee_ids}")
+            if employee_ids: # Solo consultar si hay IDs
+                employees_data_response = supabase.from_('employees').select('id, nombre').in_('id', employee_ids).execute()
+                if hasattr(employees_data_response, 'data'):
+                    employee_names_map = {item['id']: item['nombre'] for item in employees_data_response.data}
+                    print(f"Mapa de nombres de trabajadoras: {employee_names_map}")
+            
+            # Procesar los datos de asistencia de trabajadoras y agregarlos a week_data
+            for item in employees_asistencia_response.data:
+                fecha = item['fecha']
+                id_persona = item['id_persona']
+                
+                print(f"Procesando asistencia de trabajadora: Fecha={fecha}, ID_Persona={id_persona}")
+                
+                if fecha in week_data:
+                    # Añadir nombre de la trabajadora si existe
+                    week_data[fecha]['trabajadoras'].append(employee_names_map.get(id_persona, 'Desconocido'))
+
+        # 5. Convertir el diccionario de datos semanales en una lista ordenada por fecha para el frontend
+        daily_amounts = sorted(list(week_data.values()), key=lambda x: x['date'])
+        
+        print(f"DEBUG: Datos finales enviados al gráfico: {daily_amounts}")
+        print(f"--- FIN DEBUG get_week_daily_amounts ---")
+        return daily_amounts
+
+    except Exception as e:
+        print(f"ERROR: Fallo en get_week_daily_amounts: {e}")
+        return []
+
+def get_week_employees_earnings():
+    """Obtener los montos de ganancias de empleados de la semana actual (lunes a domingo)."""
+    try:
+        today = datetime.now().date()
+        days_since_monday = today.weekday()
+        start_of_week = today - timedelta(days=days_since_monday)
+        end_of_week = start_of_week + timedelta(days=6) # Domingo
+
+        print(f"\n--- DEBUG get_week_employees_earnings ---")
+        print(f"Fecha actual: {today.isoformat()}")
+        print(f"Inicio de semana (Lunes): {start_of_week.isoformat()}")
+        print(f"Fin de semana para consulta (Domingo): {end_of_week.isoformat()}")
+
+        # 1. Obtener todos los registros de asistencia (niños y trabajadoras) de la semana en una sola consulta.
+        asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
+        
+        if not (hasattr(asistencia_response, 'data') and asistencia_response.data):
+            print("DEBUG: No se encontraron registros de asistencia para la semana en get_week_employees_earnings.")
+            return []
+
+        print(f"DEBUG: Registros de asistencia obtenidos para ganancias de empleados: {asistencia_response.data}")
+
+        # 2. Calcular el total de montos de niños y horas de trabajadoras por día
+        daily_summary = {}
+        for item in asistencia_response.data:
+            fecha = item['fecha']
+            tipo = item['tipo']
+            valor = float(item['valor'])
+            
+            if fecha not in daily_summary:
+                daily_summary[fecha] = {'total_ninos_monto': 0, 'total_empleados_horas': 0}
+            
+            if tipo == 'nino':
+                daily_summary[fecha]['total_ninos_monto'] += valor
+            elif tipo == 'trabajadora':
+                daily_summary[fecha]['total_empleados_horas'] += valor
+        
+        print(f"DEBUG: Resumen diario de montos/horas: {daily_summary}")
+
+        # 3. Calcular el pago por hora para cada día
+        daily_payment_per_hour = {}
+        for fecha, data in daily_summary.items():
+            pago_por_hora = 0
+            if data['total_empleados_horas'] > 0:
+                pago_por_hora = data['total_ninos_monto'] / data['total_empleados_horas']
+            daily_payment_per_hour[fecha] = pago_por_hora
+        print(f"DEBUG: Pago por hora diario: {daily_payment_per_hour}")
+
+        # 4. Calcular las ganancias de cada empleado
+        employee_earnings = {}
+        employee_ids_in_week = set()
+
+        for item in asistencia_response.data:
+            if item['tipo'] == 'trabajadora':
+                fecha = item['fecha']
+                id_persona = item['id_persona']
+                horas_trabajadas = float(item['valor'])
+                
+                pago_por_hora_del_dia = daily_payment_per_hour.get(fecha, 0)
+                ganancia_diaria = horas_trabajadas * pago_por_hora_del_dia
+
+                if id_persona not in employee_earnings:
+                    employee_earnings[id_persona] = {'total_ganancia': 0, 'total_horas': 0, 'dias_trabajados': set()}
+                
+                employee_earnings[id_persona]['total_ganancia'] += ganancia_diaria
+                employee_earnings[id_persona]['total_horas'] += horas_trabajadas
+                employee_earnings[id_persona]['dias_trabajados'].add(fecha)
+                employee_ids_in_week.add(id_persona)
+        
+        print(f"DEBUG: Ganancias de empleados calculadas (por ID): {employee_earnings}")
+        print(f"DEBUG: IDs de empleados con ganancias esta semana: {employee_ids_in_week}")
+
+
+        # 5. Obtener los nombres de todos los empleados relevantes en una sola consulta
+        employee_names_map = {}
+        if employee_ids_in_week:
+            employees_data_response = supabase.from_('employees').select('id, nombre').in_('id', list(employee_ids_in_week)).execute()
+            if hasattr(employees_data_response, 'data'):
+                employee_names_map = {item['id']: item['nombre'] for item in employees_data_response.data}
+        print(f"DEBUG: Mapa de nombres de empleados: {employee_names_map}")
+        
+        # 6. Formatear la salida para el frontend
+        final_earnings = []
+        for id_persona, data in employee_earnings.items():
+            nombre = employee_names_map.get(id_persona, 'Nombre no encontrado')
+            final_earnings.append({
+                'nombre': nombre,
+                'total_horas': data['total_horas'],
+                'total_ganancia': data['total_ganancia'],
+                'dias_trabajados': len(data['dias_trabajados']) # Contar días únicos trabajados
+            })
+
+        # Opcional: Ordenar las ganancias finales si lo necesitas
+        final_earnings.sort(key=lambda x: x['total_ganancia'], reverse=True)
+        
+        print(f"DEBUG: Ganancias finales de empleados para el frontend: {final_earnings}")
+        print(f"--- FIN DEBUG get_week_employees_earnings ---")
+        return final_earnings
+
+    except Exception as e:
+        print(f"ERROR: Fallo en get_week_employees_earnings: {e}")
+        return []

@@ -28,8 +28,8 @@
             <h3 class="text-xl font-semibold text-pink-600">Niños en la Semana</h3>
             <i class="fas fa-baby text-pink-400 text-3xl"></i>
           </div>
-          <p class="text-4xl font-bold text-pink-800">45</p>
-          <p class="text-pink-500 text-sm mt-2">Total de niños registrados esta semana</p>
+          <p class="text-4xl font-bold text-pink-800">{{ week_ninos_unique_count }}</p>
+          <p class="text-pink-500 text-sm mt-2">Niños únicos que han asistido esta semana</p>
         </div>
 
         <!-- Tarjeta: Monto Semanal -->
@@ -38,7 +38,7 @@
             <h3 class="text-xl font-semibold text-pink-600">Monto Semanal</h3>
             <i class="fas fa-dollar-sign text-pink-400 text-3xl"></i>
           </div>
-          <p class="text-4xl font-bold text-pink-800">$2,500</p>
+          <p class="text-4xl font-bold text-pink-800">${{ week_ninos_total }}</p>
           <p class="text-pink-500 text-sm mt-2">Ingresos totales de la semana</p>
         </div>
 
@@ -55,13 +55,43 @@
         </a>
       </div>
 
-      <!-- Sección adicional para otros gráficos o tablas (ejemplo) -->
-      <div class="mt-8 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-pink-100">
-        <h3 class="text-2xl font-semibold text-pink-700 mb-4">Actividad Reciente</h3>
-        <p class="text-pink-600">Aquí podrías incluir una tabla con los últimos registros, un gráfico de asistencia, etc.</p>
-        <!-- Placeholder para contenido dinámico -->
-        <div class="h-48 bg-pink-50 rounded-lg mt-4 flex items-center justify-center text-pink-300 text-lg">
-          [Gráfico o Tabla aquí]
+      <!-- Gráfico semanal y tarjeta de trabajadoras -->
+      <div class="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Gráfico semanal (ocupa 3 columnas) -->
+        <div class="lg:col-span-3 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-pink-100">
+          <h3 class="text-2xl font-semibold text-pink-700 mb-4">Resumen Semanal de Montos</h3>
+          <div class="h-64">
+            <canvas id="weeklyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Tarjeta de trabajadoras (ocupa 1 columna) -->
+        <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-pink-100">
+          <h3 class="text-xl font-semibold text-pink-700 mb-4">
+            <i class="fas fa-user-tie mr-2"></i>
+            Trabajadoras de la Semana
+          </h3>
+          {% if week_employees_earnings %}
+            <div class="space-y-3 max-h-64 overflow-y-auto">
+              {% for employee in week_employees_earnings %}
+              <div class="bg-pink-50 rounded-lg p-3 border border-pink-200">
+                <div class="flex justify-between items-start mb-2">
+                  <h4 class="font-semibold text-pink-800 text-sm">{{ employee.nombre }}</h4>
+                  <span class="text-xs text-pink-600 bg-pink-100 px-2 py-1 rounded">{{ employee.dias_trabajados }} días</span>
+                </div>
+                <div class="text-xs text-pink-600">
+                  <div>Horas: {{ "%.1f"|format(employee.total_horas) }}</div>
+                  <div class="font-semibold text-pink-700">Ganancia: ${{ "%.2f"|format(employee.total_ganancia) }}</div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center py-8">
+              <i class="fas fa-user-tie text-pink-300 text-3xl mb-3"></i>
+              <p class="text-pink-500 text-sm">No hay trabajadoras registradas esta semana</p>
+            </div>
+          {% endif %}
         </div>
       </div>
 
@@ -498,5 +528,106 @@
       alert('Error al guardar la asistencia');
     }
   }
+
+  // Gráfico semanal
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('weeklyChart');
+    if (ctx) {
+      const weeklyData = {{ week_daily_amounts|tojson }};
+      
+      const labels = weeklyData.map(item => item.day);
+      const data = weeklyData.map(item => item.amount);
+      const dates = weeklyData.map(item => item.date);
+      
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Monto Diario ($)',
+            data: data,
+            borderColor: '#ec4899',
+            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: '#ec4899',
+            pointBorderColor: '#ffffff',
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              backgroundColor: 'rgba(236, 72, 153, 0.9)',
+              titleColor: '#ffffff',
+              bodyColor: '#ffffff',
+              borderColor: '#ec4899',
+              borderWidth: 1,
+              cornerRadius: 8,
+              displayColors: false,
+              callbacks: {
+                label: function(context) {
+                  return `$${context.parsed.y.toFixed(2)}`;
+                },
+                afterLabel: function(context) {
+                  return 'Haz clic para ver detalles';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(236, 72, 153, 0.1)',
+                drawBorder: false
+              },
+              ticks: {
+                color: '#ec4899',
+                font: {
+                  weight: '600'
+                },
+                callback: function(value) {
+                  return '$' + value.toFixed(0);
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: '#ec4899',
+                font: {
+                  weight: '600'
+                }
+              }
+            }
+          },
+          interaction: {
+            intersect: false,
+            mode: 'index'
+          },
+          onClick: function(event, elements) {
+            if (elements.length > 0) {
+              const index = elements[0].index;
+              const date = dates[index];
+              if (date) {
+                window.location.href = `/hoy/${date}`;
+              }
+            }
+          }
+        }
+      });
+    }
+  });
 </script>
 {% endblock %}
