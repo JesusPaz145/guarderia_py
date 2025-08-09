@@ -1,13 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from datetime import date, datetime
-import pytz # <-- Nuevo import
-
 from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_employees, add_employee, update_employee, delete_employee,
                       get_active_employees_count, get_active_ninos, get_active_employees,
                       add_asistencia, get_today_ninos_total, get_today_payment_per_hour,
                       get_today_ninos_asistencia, get_today_employees_asistencia,
-                      get_date_ninos_asistencia, get_date_employees_asistencia,
+                      get_date_ninos_asistencia, get_date_employees_asistencia, # Estas son las líneas importantes
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings)
 
@@ -146,7 +143,7 @@ def crear_employee():
             data['nombre'], 
             data['horas'], 
             data['usuario'], 
-            data.get('contrasena', ''),
+            data.get('contrasena', ''), # La contraseña es opcional en actualizaciones
             data['nivel'],
             status
         )
@@ -225,19 +222,18 @@ def hoy(date=None):
     if 'user' not in session:
         return redirect(url_for('login'))
     
-    # === MODIFICACIÓN DE LA ZONA HORARIA ===
-    # 1. Definir la zona horaria de Saint Joseph, Missouri
-    chicago_tz = pytz.timezone('America/Chicago')
-    
+    # Usar datetime.date del import global
+    from datetime import date as date_class 
     if date is None:
-        # 2. Obtener la fecha de hoy, pero con la zona horaria correcta
-        target_date = datetime.now(chicago_tz).date().isoformat()
+        # Si no se proporciona fecha, usar hoy
+        target_date = date_class.today().isoformat()
     else:
         # Validar que la fecha sea válida
         try:
-            target_date = date.fromisoformat(date).isoformat()
+            target_date = date_class.fromisoformat(date).isoformat()
         except ValueError:
-            target_date = datetime.now(chicago_tz).date().isoformat() # Usar la fecha correcta si la de entrada es inválida
+            # Si la fecha no es válida, usar hoy
+            target_date = date_class.today().isoformat()
     
     # Obtener datos de asistencia para la fecha especificada
     ninos_asistencia, total_ninos = get_date_ninos_asistencia(target_date)
@@ -250,13 +246,13 @@ def hoy(date=None):
     
     # Obtener información del día para el título
     try:
-        target_date_obj = date.fromisoformat(target_date)
+        target_date_obj = date_class.fromisoformat(target_date)
         day_names = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
         day_name = day_names[target_date_obj.weekday()]
         formatted_date = target_date_obj.strftime('%d/%m/%Y')
     except:
         day_name = 'Hoy'
-        formatted_date = datetime.now(chicago_tz).date().strftime('%d/%m/%Y')
+        formatted_date = date_class.today().strftime('%d/%m/%Y')
     
     print(f"DEBUG - Fecha objetivo: {target_date}")
     print(f"DEBUG - ninos_asistencia: {ninos_asistencia}")
