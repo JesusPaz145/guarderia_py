@@ -291,6 +291,28 @@ def crear_asistencia():
         print(f"Error al crear asistencia: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/asistencia/multiple', methods=['POST'])
+def crear_asistencia_multiple():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        fecha = data['fecha']
+        ninos = data['ninos']
+        
+        for nino in ninos:
+            add_asistencia(
+                fecha,
+                'nino',
+                nino['id_persona'],
+                nino['valor']
+            )
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error al crear asistencia múltiple: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/asistencia/<int:id>', methods=['PUT'])
 def actualizar_asistencia(id):
     if 'user' not in session:
@@ -313,7 +335,7 @@ def eliminar_asistencia(id):
         result = delete_asistencia(id)
         if result:
             return jsonify({'success': True})
-        return jsonify({'error': 'Error al eliminar el registro de asistencia'}), 500
+        return jsonify({'error': 'Error al eliminar el registro'}), 500
     except Exception as e:
         print(f"Error al eliminar asistencia: {e}")
         return jsonify({'error': str(e)}), 500
@@ -328,3 +350,5 @@ if __name__ == '__main__':
 
 # Para Vercel
 app.debug = False
+False
+False

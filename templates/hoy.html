@@ -141,7 +141,10 @@
                 <i class="fas fa-baby mr-3"></i>
                 Niño
               </button>
-              
+              <button onclick="showNinosModal()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                <i class="fas fa-child mr-3"></i>
+                Niños
+              </button>
               <button onclick="showEmployeeModal()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
                 <i class="fas fa-user-tie mr-3"></i>
                 Empleada
@@ -168,6 +171,28 @@
             <button onclick="closeNinoModal()" class="text-gray-500 hover:text-gray-700 font-medium transition-colors duration-300">
               Cancelar
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal para seleccionar varios niños -->
+      <div id="ninosMultiModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full mx-4 max-w-lg transform transition-all duration-300">
+          <div class="text-center">
+            <h2 class="text-xl font-bold text-pink-700 mb-4">Seleccionar Niños</h2>
+            
+            <div id="ninosListMultiple" class="max-h-96 overflow-y-auto mb-4 text-left grid grid-cols-2 md:grid-cols-3 gap-3">
+              <!-- Lista de niños se cargará aquí -->
+            </div>
+            
+            <div class="flex space-x-4 mt-6">
+                <button onclick="saveNinosAsistencia()" class="flex-1 bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300">
+                    Guardar Selección
+                </button>
+                <button onclick="closeNinosModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all duration-300">
+                    Cancelar
+                </button>
+            </div>
           </div>
         </div>
       </div>
@@ -305,132 +330,127 @@
   function navigateDay(direction) {
     const date = new Date(currentDate);
     date.setDate(date.getDate() + direction);
-    
-    // Formatear la fecha para la URL
     const formattedDate = date.toISOString().split('T')[0];
-    
-    // Navegar a la nueva fecha
     window.location.href = `/hoy/${formattedDate}`;
   }
 
-  // Funcionalidad del modal principal
+  // --- Funcionalidad de Modales ---
   const addAttendanceBtn = document.getElementById('addAttendanceBtn');
   const attendanceModal = document.getElementById('attendanceModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
 
-  // Abrir modal principal
   addAttendanceBtn.addEventListener('click', () => {
     attendanceModal.classList.remove('hidden');
     attendanceModal.classList.add('flex');
   });
-
-  // Cerrar modal principal
   closeModalBtn.addEventListener('click', () => {
     attendanceModal.classList.add('hidden');
     attendanceModal.classList.remove('flex');
   });
-
-  // Cerrar modal haciendo clic fuera
   attendanceModal.addEventListener('click', (e) => {
     if (e.target === attendanceModal) {
-      attendanceModal.classList.add('hidden');
-      attendanceModal.classList.remove('flex');
+        attendanceModal.classList.add('hidden');
+        attendanceModal.classList.remove('flex');
     }
   });
 
-  // Cerrar modal con ESC
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeAllModals();
-    }
+    if (e.key === 'Escape') closeAllModals();
   });
 
-  // Función para cerrar todos los modales
   function closeAllModals() {
     document.querySelectorAll('[id$="Modal"]').forEach(modal => {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
     });
   }
 
-  // Mostrar modal de niños
   function showNinoModal() {
     attendanceModal.classList.add('hidden');
-    attendanceModal.classList.remove('flex');
-    
-    const ninosModal = document.getElementById('ninoModal');
-    ninosModal.classList.remove('hidden');
-    ninosModal.classList.add('flex');
-    
-    loadNinos();
+    document.getElementById('ninoModal').classList.remove('hidden');
+    document.getElementById('ninoModal').classList.add('flex');
+    loadNinos(false);
   }
 
-  // Cerrar modal de niños
-  function closeNinoModal() {
-    const ninosModal = document.getElementById('ninoModal');
-    ninosModal.classList.add('hidden');
-    ninosModal.classList.remove('flex');
-    
-    attendanceModal.classList.remove('hidden');
-    attendanceModal.classList.add('flex');
+  function showNinosModal() {
+    attendanceModal.classList.add('hidden');
+    document.getElementById('ninosMultiModal').classList.remove('hidden');
+    document.getElementById('ninosMultiModal').classList.add('flex');
+    loadNinos(true);
   }
 
-  // Mostrar modal de empleados
   function showEmployeeModal() {
     attendanceModal.classList.add('hidden');
-    attendanceModal.classList.remove('flex');
-    
-    const employeeModal = document.getElementById('employeeModal');
-    employeeModal.classList.remove('hidden');
-    employeeModal.classList.add('flex');
-    
+    document.getElementById('employeeModal').classList.remove('hidden');
+    document.getElementById('employeeModal').classList.add('flex');
     loadEmployees();
   }
 
-  // Cerrar modal de empleados
-  function closeEmployeeModal() {
-    const employeeModal = document.getElementById('employeeModal');
-    employeeModal.classList.add('hidden');
-    employeeModal.classList.remove('flex');
-    
+  function closeNinoModal() {
+    document.getElementById('ninoModal').classList.add('hidden');
+    document.getElementById('ninoModal').classList.remove('flex');
     attendanceModal.classList.remove('hidden');
     attendanceModal.classList.add('flex');
   }
 
-  // Cargar lista de niños
-  async function loadNinos() {
+  function closeNinosModal() {
+    document.getElementById('ninosMultiModal').classList.add('hidden');
+    document.getElementById('ninosMultiModal').classList.remove('flex');
+    attendanceModal.classList.remove('hidden');
+    attendanceModal.classList.add('flex');
+  }
+
+  function closeEmployeeModal() {
+    document.getElementById('employeeModal').classList.add('hidden');
+    document.getElementById('employeeModal').classList.remove('flex');
+    attendanceModal.classList.remove('hidden');
+    attendanceModal.classList.add('flex');
+  }
+
+  // --- Carga de Datos ---
+  async function loadNinos(multiple = false) {
     try {
       const response = await fetch('/api/ninos-activos');
       const ninos = await response.json();
       
-      const ninosList = document.getElementById('ninosList');
+      const listId = multiple ? 'ninosListMultiple' : 'ninosList';
+      const ninosList = document.getElementById(listId);
       ninosList.innerHTML = '';
-      
-      // Crear contenedor con grid de 2 columnas
-      const gridContainer = document.createElement('div');
-      gridContainer.className = 'grid grid-cols-2 gap-3';
-      
+
       ninos.forEach(nino => {
         const ninoCard = document.createElement('div');
-        ninoCard.className = 'bg-pink-50 hover:bg-pink-100 p-4 rounded-lg cursor-pointer transition-all duration-300 border border-pink-200 text-center';
-        ninoCard.innerHTML = `
-          <div class="flex flex-col items-center">
-            <i class="fas fa-baby text-pink-400 text-2xl mb-2"></i>
-            <h3 class="font-semibold text-pink-700 text-sm">${nino.nombre}</h3>
-          </div>
-        `;
-        
-        ninoCard.addEventListener('click', () => selectNino(nino));
-        gridContainer.appendChild(ninoCard);
+        if (multiple) {
+          ninoCard.className = 'relative bg-pink-50 hover:bg-pink-100 p-4 rounded-lg cursor-pointer transition-all duration-300 border border-pink-200 text-center';
+          ninoCard.innerHTML = `
+            <input type="checkbox" data-id="${nino.id}" data-monto="${nino.monto}" class="absolute top-2 right-2 h-5 w-5 text-pink-600 focus:ring-pink-500 border-gray-300 rounded">
+            <div class="flex flex-col items-center">
+              <i class="fas fa-baby text-pink-400 text-3xl mb-2"></i>
+              <h3 class="font-semibold text-pink-700 text-sm">${nino.nombre}</h3>
+            </div>
+          `;
+          ninoCard.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+              const checkbox = ninoCard.querySelector('input[type="checkbox"]');
+              checkbox.checked = !checkbox.checked;
+            }
+          });
+        } else {
+          ninoCard.className = 'bg-pink-50 hover:bg-pink-100 p-4 rounded-lg cursor-pointer transition-all duration-300 border border-pink-200 text-center';
+          ninoCard.innerHTML = `
+            <div class="flex flex-col items-center">
+              <i class="fas fa-baby text-pink-400 text-3xl mb-2"></i>
+              <h3 class="font-semibold text-pink-700 text-sm">${nino.nombre}</h3>
+            </div>
+          `;
+          ninoCard.addEventListener('click', () => selectNino(nino));
+        }
+        ninosList.appendChild(ninoCard);
       });
-      
-      ninosList.appendChild(gridContainer);
     } catch (error) {
       console.error('Error cargando niños:', error);
     }
   }
 
-  // Cargar lista de empleados
   async function loadEmployees() {
     try {
       const response = await fetch('/api/employees-activos');
@@ -439,7 +459,6 @@
       const employeesList = document.getElementById('employeesList');
       employeesList.innerHTML = '';
       
-      // Crear contenedor con grid de 2 columnas
       const gridContainer = document.createElement('div');
       gridContainer.className = 'grid grid-cols-2 gap-3';
       
@@ -463,95 +482,36 @@
     }
   }
 
-  // Seleccionar niño
+  // --- Selección y Guardado ---
   function selectNino(nino) {
     selectedNino = nino;
-    
-    // Cerrar modal de niños
     closeNinoModal();
-    
-    // Mostrar modal de confirmación
-    const confirmModal = document.getElementById('confirmNinoModal');
-    confirmModal.classList.remove('hidden');
-    confirmModal.classList.add('flex');
-    
-    // Llenar datos
+    document.getElementById('confirmNinoModal').classList.remove('hidden');
+    document.getElementById('confirmNinoModal').classList.add('flex');
     document.getElementById('selectedNinoName').textContent = nino.nombre;
     document.getElementById('ninoFecha').value = currentDate;
     document.getElementById('ninoMonto').value = nino.monto;
   }
 
-  // Seleccionar empleada
-  function selectEmployee(employee) {
-    selectedEmployee = employee;
-    
-    // Cerrar modal de empleados
-    closeEmployeeModal();
-    
-    // Mostrar modal de confirmación
-    const confirmModal = document.getElementById('confirmEmployeeModal');
-    confirmModal.classList.remove('hidden');
-    confirmModal.classList.add('flex');
-    
-    // Llenar datos
-    document.getElementById('selectedEmployeeName').textContent = employee.nombre;
-    document.getElementById('employeeFecha').value = currentDate;
-    document.getElementById('employeeHoras').value = employee.horas;
-  }
-
-  // Cerrar modal de confirmación de niño
-  function closeConfirmNinoModal() {
-    const confirmModal = document.getElementById('confirmNinoModal');
-    confirmModal.classList.add('hidden');
-    confirmModal.classList.remove('flex');
-    
-    attendanceModal.classList.remove('hidden');
-    attendanceModal.classList.add('flex');
-  }
-
-  // Cerrar modal de confirmación de empleada
-  function closeConfirmEmployeeModal() {
-    const confirmModal = document.getElementById('confirmEmployeeModal');
-    confirmModal.classList.add('hidden');
-    confirmModal.classList.remove('flex');
-    
-    attendanceModal.classList.remove('hidden');
-    attendanceModal.classList.add('flex');
-  }
-
-  // Guardar asistencia de niño
   async function saveNinoAsistencia() {
     if (!selectedNino) return;
-    
     const fecha = document.getElementById('ninoFecha').value;
     const monto = document.getElementById('ninoMonto').value;
-    
     if (!fecha || !monto) {
       alert('Por favor complete todos los campos');
       return;
     }
-    
     try {
       const response = await fetch('/api/asistencia', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fecha: fecha,
-          tipo: 'nino',
-          id_persona: selectedNino.id,
-          valor: parseFloat(monto)
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha, tipo: 'nino', id_persona: selectedNino.id, valor: parseFloat(monto) })
       });
-      
       const result = await response.json();
-      
       if (result.success) {
         alert('Asistencia guardada exitosamente');
         closeConfirmNinoModal();
         selectedNino = null;
-        // Recargar la página para mostrar los nuevos datos
         window.location.reload();
       } else {
         alert('Error al guardar la asistencia: ' + result.error);
@@ -562,39 +522,59 @@
     }
   }
 
-  // Guardar asistencia de empleada
+  async function saveNinosAsistencia() {
+    const ninosList = document.getElementById('ninosListMultiple');
+    const checkboxes = ninosList.querySelectorAll('input[type="checkbox"]:checked');
+    
+    if (checkboxes.length === 0) {
+      alert('Por favor seleccione al menos un niño.');
+      return;
+    }
+
+    const ninosData = Array.from(checkboxes).map(cb => ({
+      id_persona: parseInt(cb.dataset.id),
+      valor: parseFloat(cb.dataset.monto)
+    }));
+
+    try {
+      const response = await fetch('/api/asistencia/multiple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: currentDate, ninos: ninosData })
+      });
+      const result = await response.json();
+      if (result.success) {
+        alert('Asistencia de niños guardada exitosamente.');
+        closeNinosModal();
+        window.location.reload();
+      } else {
+        alert('Error al guardar la asistencia: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error guardando asistencia múltiple:', error);
+      alert('Ocurrió un error al guardar la asistencia.');
+    }
+  }
+
   async function saveEmployeeAsistencia() {
     if (!selectedEmployee) return;
-    
     const fecha = document.getElementById('employeeFecha').value;
     const horas = document.getElementById('employeeHoras').value;
-    
     if (!fecha || !horas) {
       alert('Por favor complete todos los campos');
       return;
     }
-    
     try {
       const response = await fetch('/api/asistencia', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fecha: fecha,
-          tipo: 'trabajadora',
-          id_persona: selectedEmployee.id,
-          valor: parseFloat(horas)
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha, tipo: 'trabajadora', id_persona: selectedEmployee.id, valor: parseFloat(horas) })
       });
-      
       const result = await response.json();
-      
       if (result.success) {
         alert('Asistencia guardada exitosamente');
         closeConfirmEmployeeModal();
         selectedEmployee = null;
-        // Recargar la página para mostrar los nuevos datos
         window.location.reload();
       } else {
         alert('Error al guardar la asistencia: ' + result.error);
@@ -610,7 +590,6 @@
     editingAsistenciaId = id;
     document.getElementById('editPersonName').textContent = nombre;
     document.getElementById('editValor').value = valor;
-    
     const editModal = document.getElementById('editAsistenciaModal');
     editModal.classList.remove('hidden');
     editModal.classList.add('flex');
@@ -620,7 +599,6 @@
     editingAsistenciaId = id;
     document.getElementById('editPersonName').textContent = nombre;
     document.getElementById('editValor').value = valor;
-    
     const editModal = document.getElementById('editAsistenciaModal');
     editModal.classList.remove('hidden');
     editModal.classList.add('flex');
@@ -635,31 +613,21 @@
 
   async function saveEditAsistencia() {
     if (!editingAsistenciaId) return;
-    
     const valor = document.getElementById('editValor').value;
-    
     if (!valor) {
       alert('Por favor complete el campo valor');
       return;
     }
-    
     try {
       const response = await fetch(`/api/asistencia/${editingAsistenciaId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          valor: parseFloat(valor)
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor: parseFloat(valor) })
       });
-      
       const result = await response.json();
-      
       if (result.success) {
         alert('Asistencia actualizada exitosamente');
         closeEditAsistenciaModal();
-        // Recargar la página para mostrar los datos actualizados
         window.location.reload();
       } else {
         alert('Error al actualizar la asistencia: ' + result.error);
@@ -677,12 +645,9 @@
         const response = await fetch(`/api/asistencia/${id}`, {
           method: 'DELETE'
         });
-        
         const result = await response.json();
-        
         if (result.success) {
           alert('Asistencia eliminada exitosamente');
-          // Recargar la página para mostrar los datos actualizados
           window.location.reload();
         } else {
           alert('Error al eliminar la asistencia: ' + result.error);
@@ -700,12 +665,9 @@
         const response = await fetch(`/api/asistencia/${id}`, {
           method: 'DELETE'
         });
-        
         const result = await response.json();
-        
         if (result.success) {
           alert('Asistencia eliminada exitosamente');
-          // Recargar la página para mostrar los datos actualizados
           window.location.reload();
         } else {
           alert('Error al eliminar la asistencia: ' + result.error);
