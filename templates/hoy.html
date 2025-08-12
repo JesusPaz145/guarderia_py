@@ -407,6 +407,20 @@
     attendanceModal.classList.add('flex');
   }
 
+  function closeConfirmNinoModal() {
+    document.getElementById('confirmNinoModal').classList.add('hidden');
+    document.getElementById('confirmNinoModal').classList.remove('flex');
+    attendanceModal.classList.remove('hidden');
+    attendanceModal.classList.add('flex');
+  }
+
+  function closeConfirmEmployeeModal() {
+    document.getElementById('confirmEmployeeModal').classList.add('hidden');
+    document.getElementById('confirmEmployeeModal').classList.remove('flex');
+    attendanceModal.classList.remove('hidden');
+    attendanceModal.classList.add('flex');
+  }
+
   // --- Carga de Datos ---
   async function loadNinos(multiple = false) {
     try {
@@ -491,6 +505,16 @@
     document.getElementById('selectedNinoName').textContent = nino.nombre;
     document.getElementById('ninoFecha').value = currentDate;
     document.getElementById('ninoMonto').value = nino.monto;
+  }
+
+  function selectEmployee(employee) {
+    selectedEmployee = employee;
+    closeEmployeeModal();
+    document.getElementById('confirmEmployeeModal').classList.remove('hidden');
+    document.getElementById('confirmEmployeeModal').classList.add('flex');
+    document.getElementById('selectedEmployeeName').textContent = employee.nombre;
+    document.getElementById('employeeFecha').value = currentDate;
+    document.getElementById('employeeHoras').value = 8;
   }
 
   async function saveNinoAsistencia() {

@@ -1,0 +1,20 @@
+{
+  "name": "guarderia_py",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JesusPaz145/guarderia_py.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JesusPaz145/guarderia_py/issues"
+  },
+  "homepage": "https://github.com/JesusPaz145/guarderia_py#readme"
+}
