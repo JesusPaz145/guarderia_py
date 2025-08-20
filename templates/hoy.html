@@ -326,6 +326,27 @@
   // Variable para la fecha actual
   let currentDate = '{{ current_date }}';
   
+  // --- Selección y Guardado ---
+  function selectNino(nino) {
+    selectedNino = nino;
+    closeNinoModal();
+    document.getElementById('confirmNinoModal').classList.remove('hidden');
+    document.getElementById('confirmNinoModal').classList.add('flex');
+    document.getElementById('selectedNinoName').textContent = nino.nombre;
+    document.getElementById('ninoFecha').value = currentDate;
+    document.getElementById('ninoMonto').value = nino.monto;
+  }
+
+  function selectEmployee(employee) {
+    selectedEmployee = employee;
+    closeEmployeeModal();
+    document.getElementById('confirmEmployeeModal').classList.remove('hidden');
+    document.getElementById('confirmEmployeeModal').classList.add('flex');
+    document.getElementById('selectedEmployeeName').textContent = employee.nombre;
+    document.getElementById('employeeFecha').value = currentDate;
+    document.getElementById('employeeHoras').value = 8;
+  }
+  
   // Función para navegar entre días
   function navigateDay(direction) {
     const date = new Date(currentDate);
@@ -494,27 +515,6 @@
     } catch (error) {
       console.error('Error cargando empleados:', error);
     }
-  }
-
-  // --- Selección y Guardado ---
-  function selectNino(nino) {
-    selectedNino = nino;
-    closeNinoModal();
-    document.getElementById('confirmNinoModal').classList.remove('hidden');
-    document.getElementById('confirmNinoModal').classList.add('flex');
-    document.getElementById('selectedNinoName').textContent = nino.nombre;
-    document.getElementById('ninoFecha').value = currentDate;
-    document.getElementById('ninoMonto').value = nino.monto;
-  }
-
-  function selectEmployee(employee) {
-    selectedEmployee = employee;
-    closeEmployeeModal();
-    document.getElementById('confirmEmployeeModal').classList.remove('hidden');
-    document.getElementById('confirmEmployeeModal').classList.add('flex');
-    document.getElementById('selectedEmployeeName').textContent = employee.nombre;
-    document.getElementById('employeeFecha').value = currentDate;
-    document.getElementById('employeeHoras').value = 8;
   }
 
   async function saveNinoAsistencia() {
