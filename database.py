@@ -4,6 +4,11 @@ from supabase import create_client
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta # Asegúrate de que esta línea esté aquí al principio
+import pytz
+
+def get_current_time():
+    """Returns the current time in 'America/Chicago' timezone."""
+    return datetime.now(pytz.timezone('America/Chicago'))
 
 # Cargar variables de entorno
 load_dotenv()
@@ -379,7 +384,7 @@ def add_asistencia(fecha, tipo, id_persona, valor):
 def get_today_ninos_total():
     """Obtener la suma total de montos de niños para hoy"""
     try:
-        today = datetime.now().date().isoformat() # Usar datetime.now().date()
+        today = get_current_time().date().isoformat() # Usar datetime.now().date()
         
         print(f"\n=== Obteniendo total de niños para hoy ({today}) ===")
         
@@ -397,7 +402,7 @@ def get_today_ninos_total():
 def get_today_payment_per_hour():
     """Obtener el pago por hora de hoy (total niños / total horas trabajadoras)"""
     try:
-        today = datetime.now().date().isoformat() # Usar datetime.now().date()
+        today = get_current_time().date().isoformat() # Usar datetime.now().date()
         
         print(f"\n=== Calculando pago por hora para hoy ({today}) ===")
         
@@ -477,7 +482,7 @@ def get_today_ninos_asistencia(): # ESTA ES LA FUNCIÓN QUE SE SUGIRIÓ EN EL ER
     """Obtener asistencia de niños para hoy con información del niño"""
     # Esta función debería estar llamando a get_date_ninos_asistencia con la fecha de hoy
     # Para evitar duplicación de lógica, haremos que llame a la función general
-    return get_date_ninos_asistencia(datetime.now().date().isoformat())
+    return get_date_ninos_asistencia(get_current_time().date().isoformat())
 
 
 def get_date_employees_asistencia(target_date):
@@ -531,8 +536,7 @@ def get_today_employees_asistencia(): # ESTA ES LA FUNCIÓN QUE SE SUGIRIÓ EN E
     """Obtener asistencia de empleados para hoy con información del empleado"""
     # Esta función debería estar llamando a get_date_employees_asistencia con la fecha de hoy
     # Para evitar duplicación de lógica, haremos que llame a la función general
-    return get_date_employees_asistencia(datetime.now().date().isoformat())
-
+    return get_date_employees_asistencia(get_current_time().date().isoformat())
 
 def update_asistencia(id, valor):
     """Actualizar el valor de un registro de asistencia"""
@@ -571,7 +575,7 @@ def get_week_ninos_unique_count():
     """Obtener el número de niños únicos que han asistido en la semana actual"""
     try:
         #today = date.today() # Eliminada
-        today = datetime.now().date()
+        today = get_current_time().date()
         
         # Calcular el inicio de la semana (lunes)
         # weekday() devuelve 0=lunes, 1=martes, ..., 6=domingo
@@ -606,7 +610,7 @@ def get_week_ninos_total():
     """Obtener la suma total de montos de niños para la semana actual"""
     try:
         #today = date.today() # Eliminada
-        today = datetime.now().date()
+        today = get_current_time().date()
         
         # Calcular el inicio de la semana (lunes)
         days_since_monday = today.weekday()
@@ -636,7 +640,7 @@ def get_week_daily_amounts():
     Esto incluye los nombres de niños y trabajadoras que asistieron ese día.
     """
     try:
-        today = datetime.now().date()
+        today = get_current_time().date()
         # weekday() devuelve 0 para lunes, 6 para domingo.
         # Restamos los días desde el lunes para obtener el inicio de la semana actual.
         start_of_week = today - timedelta(days=today.weekday())
@@ -732,7 +736,7 @@ def get_week_daily_amounts():
 def get_week_employees_earnings():
     """Obtener los montos de ganancias de empleados de la semana actual (lunes a domingo)."""
     try:
-        today = datetime.now().date()
+        today = get_current_time().date()
         days_since_monday = today.weekday()
         start_of_week = today - timedelta(days=days_since_monday)
         end_of_week = start_of_week + timedelta(days=6) # Domingo

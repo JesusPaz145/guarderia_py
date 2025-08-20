@@ -6,7 +6,7 @@ from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_today_ninos_asistencia, get_today_employees_asistencia,
                       get_date_ninos_asistencia, get_date_employees_asistencia, # Estas son las líneas importantes
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
-                      get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings)
+                      get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, get_current_time)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -226,14 +226,14 @@ def hoy(date=None):
     from datetime import date as date_class 
     if date is None:
         # Si no se proporciona fecha, usar hoy
-        target_date = date_class.today().isoformat()
+        target_date = get_current_time().date().isoformat()
     else:
         # Validar que la fecha sea válida
         try:
             target_date = date_class.fromisoformat(date).isoformat()
         except ValueError:
             # Si la fecha no es válida, usar hoy
-            target_date = date_class.today().isoformat()
+            target_date = get_current_time().date().isoformat()
     
     # Obtener datos de asistencia para la fecha especificada
     ninos_asistencia, total_ninos = get_date_ninos_asistencia(target_date)
@@ -252,7 +252,7 @@ def hoy(date=None):
         formatted_date = target_date_obj.strftime('%d/%m/%Y')
     except:
         day_name = 'Hoy'
-        formatted_date = date_class.today().strftime('%d/%m/%Y')
+        formatted_date = get_current_time().date().strftime('%d/%m/%Y')
     
     print(f"DEBUG - Fecha objetivo: {target_date}")
     print(f"DEBUG - ninos_asistencia: {ninos_asistencia}")
