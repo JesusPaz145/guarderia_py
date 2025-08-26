@@ -3,10 +3,10 @@ from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_employees, add_employee, update_employee, delete_employee,
                       get_active_employees_count, get_active_ninos, get_active_employees,
                       add_asistencia, get_today_ninos_total, get_today_payment_per_hour,
-                      get_today_ninos_asistencia, get_today_employees_asistencia,
-                      get_date_ninos_asistencia, get_date_employees_asistencia, # Estas son las líneas importantes
+                      get_date_ninos_asistencia, get_date_employees_asistencia,
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
-                      get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, get_current_time)
+                      get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
+                      get_current_time, add_pago, get_recent_pagos, get_pending_payments)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -271,6 +271,46 @@ def hoy(date=None):
                            current_date=target_date,
                            day_name=day_name,
                            formatted_date=formatted_date)
+
+@app.route('/pagos')
+def pagos():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    recent_pagos = get_recent_pagos(limit=15)
+    pending_payments = get_pending_payments()
+    
+    # Para el modal de agregar pago, necesito la lista de niños y empleados activos
+    ninos_activos = get_active_ninos()
+    employees_activos = get_active_employees()
+    
+    return render_template('pagos.html', 
+                           active_page='pagos',
+                           recent_pagos=recent_pagos,
+                           pending_payments=pending_payments,
+                           ninos_activos=ninos_activos,
+                           employees_activos=employees_activos,
+                           get_current_time=get_current_time)
+
+@app.route('/api/pagos', methods=['POST'])
+def crear_pago():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        result = add_pago(
+            data['fecha'],
+            data['id_nino'],
+            data['id_empleado'],
+            data['monto'],
+            data['tipo']
+        )
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al crear el pago'}), 500
+    except Exception as e:
+        print(f"Error al crear pago: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/asistencia', methods=['POST'])
 def crear_asistencia():

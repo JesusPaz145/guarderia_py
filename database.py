@@ -835,3 +835,139 @@ def get_week_employees_earnings():
     except Exception as e:
         print(f"ERROR: Fallo en get_week_employees_earnings: {e}")
         return []
+
+def add_pago(fecha, id_nino, id_empleado, monto, tipo):
+    """Agregar un nuevo pago a la base de datos."""
+    try:
+        data = {
+            "date": fecha,
+            "id_nino": id_nino,
+            "id_empleado": id_empleado,
+            "monto": float(monto),
+            "tipo": tipo  # 'Efectivo' o 'Zelle'
+        }
+        
+        response = supabase.table('pagos').insert(data).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error al agregar pago: {e}")
+        return None
+
+def get_recent_pagos(limit=10):
+    """Obtener los pagos más recientes."""
+    try:
+        print("\n--- DEBUG: Iniciando get_recent_pagos ---")
+        query = '*, ninos(nombre), employees(nombre)'
+        print(f"Ejecutando consulta: .from_('pagos').select('{query}')")
+        
+        response = supabase.from_('pagos').select(query).order('date', desc=True).order('id', desc=True).limit(limit).execute()
+        
+        print(f"Respuesta cruda de Supabase: {response}")
+        
+        if hasattr(response, 'data'):
+            print(f"Datos recibidos: {response.data}")
+            if not response.data:
+                print("La consulta no devolvió datos.")
+                return []
+
+            pagos = []
+            print("Procesando registros...")
+            for i, item in enumerate(response.data):
+                print(f"  Item {i}: {item}")
+                
+                nombre_nino = 'No encontrado'
+                if item.get('ninos'):
+                    if isinstance(item['ninos'], dict):
+                        nombre_nino = item['ninos'].get('nombre', 'Nombre Ausente')
+                    else:
+                        print(f"  Advertencia: 'ninos' no es un diccionario: {item['ninos']}")
+                else:
+                    print("  Advertencia: No se encontró la clave 'ninos' en el item.")
+
+                nombre_empleada = 'No encontrada'
+                if item.get('employees'):
+                    if isinstance(item['employees'], dict):
+                        nombre_empleada = item['employees'].get('nombre', 'Nombre Ausente')
+                    else:
+                        print(f"  Advertencia: 'employees' no es un diccionario: {item['employees']}")
+                else:
+                    print("  Advertencia: No se encontró la clave 'employees' en el item.")
+
+                pago_procesado = {
+                    'id': item.get('id', 'N/A'),
+                    'date': item.get('date', 'N/A'),
+                    'monto': float(item.get('monto', 0)),
+                    'tipo': item.get('tipo', 'N/A'),
+                    'nombre_nino': nombre_nino,
+                    'nombre_empleada': nombre_empleada
+                }
+                print(f"  Pago procesado {i}: {pago_procesado}")
+                pagos.append(pago_procesado)
+            
+            print(f"--- DEBUG: Finalizando get_recent_pagos. Total de pagos procesados: {len(pagos)} ---")
+            return pagos
+        else:
+            print("El objeto de respuesta de Supabase no tiene el atributo 'data'.")
+            return []
+    except Exception as e:
+        print(f"ERROR CATASTRÓFICO en get_recent_pagos: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_pending_payments():
+    """Calcula los saldos pendientes de todos los niños."""
+    try:
+        # 1. Obtener todos los niños activos
+        ninos_response = supabase.from_('ninos').select('id, nombre, status').eq('status', 1).execute()
+        if not (hasattr(ninos_response, 'data') and ninos_response.data):
+            return []
+        
+        ninos = ninos_response.data
+        nino_ids = [nino['id'] for nino in ninos]
+
+        # 2. Obtener el total de asistencia para todos los niños activos en una consulta
+        asistencia_response = supabase.from_('asistencia').select('id_persona, valor').eq('tipo', 'nino').in_('id_persona', nino_ids).execute()
+        
+        total_asistencia = {}
+        if hasattr(asistencia_response, 'data'):
+            for record in asistencia_response.data:
+                nino_id = record['id_persona']
+                total_asistencia[nino_id] = total_asistencia.get(nino_id, 0) + float(record['valor'])
+
+        # 3. Obtener el total de pagos para todos los niños activos en una consulta
+        pagos_response = supabase.from_('pagos').select('id_nino, monto').in_('id_nino', nino_ids).execute()
+        
+        total_pagos = {}
+        if hasattr(pagos_response, 'data'):
+            for record in pagos_response.data:
+                nino_id = record['id_nino']
+                total_pagos[nino_id] = total_pagos.get(nino_id, 0) + float(record['monto'])
+
+        # 4. Calcular saldos pendientes
+        pending_payments = []
+        for nino in ninos:
+            nino_id = nino['id']
+            deuda = total_asistencia.get(nino_id, 0)
+            pagado = total_pagos.get(nino_id, 0)
+            saldo = deuda - pagado
+            
+            # Solo mostrar niños con deuda o que han asistido/pagado algo
+            if deuda > 0 or pagado > 0:
+                pending_payments.append({
+                    'id_nino': nino_id,
+                    'nombre': nino['nombre'],
+                    'total_deuda': deuda,
+                    'total_pagado': pagado,
+                    'saldo_pendiente': saldo
+                })
+        
+        # Ordenar por saldo pendiente (de mayor a menor deuda)
+        pending_payments.sort(key=lambda x: x['saldo_pendiente'], reverse=True)
+        
+        return pending_payments
+
+    except Exception as e:
+        print(f"Error al obtener pagos pendientes: {e}")
+        return []
