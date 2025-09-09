@@ -5,9 +5,20 @@
 {% block header_title %}Dashboard{% endblock %}
 
 {% block content %}
-      <h1 class="text-4xl font-extrabold text-pink-700 mb-8 tracking-tight drop-shadow-sm">
-        Resumen Semanal
-      </h1>
+      <div class="flex items-center justify-between mb-8">
+        <a href="{{ url_for('dashboard', date=prev_week_start_str) }}" class="bg-pink-500 hover:bg-pink-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300">
+            <i class="fas fa-chevron-left text-xl"></i>
+        </a>
+        <div class="text-center">
+            <h1 class="text-4xl font-extrabold text-pink-700 tracking-tight drop-shadow-sm">
+                Resumen Semanal
+            </h1>
+            <p class="text-lg text-pink-500 mt-2">{{ week_start_str }} - {{ week_end_str }}</p>
+        </div>
+        <a href="{{ url_for('dashboard', date=next_week_start_str) }}" class="bg-pink-500 hover:bg-pink-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300">
+            <i class="fas fa-chevron-right text-xl"></i>
+        </a>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Tarjeta: Reporte de Hoy -->

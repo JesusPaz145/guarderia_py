@@ -571,23 +571,15 @@ def delete_asistencia(id):
         print(f"Error al eliminar asistencia: {e}")
         return False
 
-def get_week_ninos_unique_count():
-    """Obtener el número de niños únicos que han asistido en la semana actual"""
+def get_week_ninos_unique_count(start_date, end_date):
+    """Obtener el número de niños únicos en un rango de fechas"""
     try:
-        #today = date.today() # Eliminada
-        today = get_current_time().date()
+        print(f"\n=== Obteniendo niños únicos del período ===")
+        print(f"Fecha inicio: {start_date}")
+        print(f"Fecha fin: {end_date}")
         
-        # Calcular el inicio de la semana (lunes)
-        # weekday() devuelve 0=lunes, 1=martes, ..., 6=domingo
-        days_since_monday = today.weekday()
-        start_of_week = today - timedelta(days=days_since_monday)
-        
-        print(f"\n=== Obteniendo niños únicos de la semana ===")
-        print(f"Fecha actual: {today}")
-        print(f"Inicio de semana (lunes): {start_of_week}")
-        
-        # Obtener todos los registros de asistencia de niños desde el lunes hasta hoy
-        response = supabase.from_('asistencia').select('id_persona').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', today.isoformat()).execute()
+        # Obtener todos los registros de asistencia de niños para el período especificado
+        response = supabase.from_('asistencia').select('id_persona').eq('tipo', 'nino').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).execute()
         
         if hasattr(response, 'data') and response.data:
             # Obtener IDs únicos de niños
@@ -596,82 +588,71 @@ def get_week_ninos_unique_count():
                 unique_ninos_ids.add(item['id_persona'])
             
             count = len(unique_ninos_ids)
-            print(f"Niños únicos en la semana: {count}")
+            print(f"Niños únicos en el período: {count}")
             print(f"IDs únicos: {unique_ninos_ids}")
             return count
         else:
-            print("No se encontraron registros de asistencia de niños en la semana")
+            print("No se encontraron registros de asistencia de niños en el período especificado")
             return 0
     except Exception as e:
-        print(f"Error al obtener conteo de niños únicos de la semana: {e}")
+        print(f"Error al obtener conteo de niños únicos del período: {e}")
         return 0
 
-def get_week_ninos_total():
-    """Obtener la suma total de montos de niños para la semana actual"""
+def get_week_ninos_total(start_date, end_date):
+    """Obtener la suma total de montos de niños para un rango de fechas específico"""
     try:
-        #today = date.today() # Eliminada
-        today = get_current_time().date()
+        print(f"\n=== Obteniendo total de niños del período ===")
+        print(f"Fecha inicio: {start_date}")
+        print(f"Fecha fin: {end_date}")
         
-        # Calcular el inicio de la semana (lunes)
-        days_since_monday = today.weekday()
-        start_of_week = today - timedelta(days=days_since_monday)
-        
-        print(f"\n=== Obteniendo total de niños de la semana ===")
-        print(f"Fecha actual: {today}")
-        print(f"Inicio de semana (lunes): {start_of_week}")
-        
-        # Obtener todos los registros de asistencia de niños desde el lunes hasta hoy
-        response = supabase.from_('asistencia').select('valor').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', today.isoformat()).execute()
+        # Obtener todos los registros de asistencia de niños para el período especificado
+        response = supabase.from_('asistencia').select('valor').eq('tipo', 'nino').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).execute()
         
         if hasattr(response, 'data') and response.data:
             total = sum(float(item['valor']) for item in response.data)
-            print(f"Total de niños de la semana: ${total}")
+            print(f"Total de niños del período: ${total}")
             return total
         else:
             print("No se encontraron registros de asistencia de niños en la semana")
             return 0
     except Exception as e:
-        print(f"Error al obtener total de niños de la semana: {e}")
+        print(f"Error al obtener total de niños del período: {e}")
         return 0
 
 
-def get_week_daily_amounts():
-    """Obtener los montos diarios de la semana actual (lunes a domingo) de manera eficiente.
-    Esto incluye los nombres de niños y trabajadoras que asistieron ese día.
+def get_week_daily_amounts(start_date, end_date):
+    """Obtener los montos diarios para un rango de fechas específico.
+    Esto incluye los nombres de niños y trabajadoras que asistieron cada día.
     """
     try:
-        today = get_current_time().date()
-        # weekday() devuelve 0 para lunes, 6 para domingo.
-        # Restamos los días desde el lunes para obtener el inicio de la semana actual.
-        start_of_week = today - timedelta(days=today.weekday())
-        end_of_week_query = start_of_week + timedelta(days=6) # Rango hasta el domingo
-
         print(f"\n--- DEBUG get_week_daily_amounts ---")
-        print(f"Fecha actual: {today.isoformat()}")
-        print(f"Inicio de semana (Lunes): {start_of_week.isoformat()}")
-        print(f"Fin de semana para consulta (Domingo): {end_of_week_query.isoformat()}")
+        print(f"Fecha inicio: {start_date.isoformat()}")
+        print(f"Fecha fin: {end_date.isoformat()}")
 
-        # Crear una estructura para los 7 días de la semana, inicializando los montos a 0
+        # Calcular el número de días en el rango
+        days_range = (end_date - start_date).days + 1
+        
+        # Crear una estructura para los días en el rango, inicializando los montos a 0
         # y las listas de nombres vacías.
         week_data = {
-            (start_of_week + timedelta(days=i)).isoformat(): {
-                'day': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][i],
-                'date': (start_of_week + timedelta(days=i)).isoformat(), # Añadir la fecha aquí también
+            (start_date + timedelta(days=i)).isoformat(): {
+                'day': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][(start_date + timedelta(days=i)).weekday()],
+                'date': (start_date + timedelta(days=i)).isoformat(),
                 'amount': 0,
                 'ninos': [],
                 'trabajadoras': []
             }
-            for i in range(7)
+            for i in range(days_range)
         }
         print(f"Estructura week_data inicializada: {week_data}")
 
         # 1. Obtener todos los registros de asistencia de niños para la semana en una sola consulta.
-        # El rango de fechas va desde el lunes de la semana actual hasta el domingo de la semana actual.
-        ninos_asistencia_response = supabase.from_('asistencia').select('fecha, valor, id_persona').eq('tipo', 'nino').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week_query.isoformat()).execute()
+        # Obtener asistencia de niños para el rango de fechas especificado
+        ninos_asistencia_response = supabase.from_('asistencia').select('fecha, valor, id_persona').eq('tipo', 'nino').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).execute()
         
         print(f"Respuesta cruda de asistencia de niños: {ninos_asistencia_response}")
 
-        # 2. Obtener los nombres de todos los niños que asistieron en la semana en una sola consulta.
+        # 2. Obtener los nombres de todos los niños que asistieron en el período
         nino_names_map = {}
         if hasattr(ninos_asistencia_response, 'data') and ninos_asistencia_response.data:
             nino_ids = list(set(item['id_persona'] for item in ninos_asistencia_response.data)) # Obtener IDs únicos
@@ -695,12 +676,12 @@ def get_week_daily_amounts():
                     # Añadir nombre del niño si existe, si no, 'Desconocido'
                     week_data[fecha]['ninos'].append(nino_names_map.get(id_persona, 'Desconocido'))
 
-        # 3. Obtener todos los registros de asistencia de trabajadoras para la semana en una sola consulta.
-        employees_asistencia_response = supabase.from_('asistencia').select('fecha, id_persona').eq('tipo', 'trabajadora').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week_query.isoformat()).execute()
+        # 3. Obtener todos los registros de asistencia de trabajadoras para el período especificado
+        employees_asistencia_response = supabase.from_('asistencia').select('fecha, id_persona').eq('tipo', 'trabajadora').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).execute()
         
         print(f"Respuesta cruda de asistencia de trabajadoras: {employees_asistencia_response}")
 
-        # 4. Obtener los nombres de todas las trabajadoras que asistieron en la semana en una sola consulta.
+        # 4. Obtener los nombres de todas las trabajadoras que asistieron en el período
         employee_names_map = {}
         if hasattr(employees_asistencia_response, 'data') and employees_asistencia_response.data:
             employee_ids = list(set(item['id_persona'] for item in employees_asistencia_response.data)) # Obtener IDs únicos
@@ -733,29 +714,18 @@ def get_week_daily_amounts():
         print(f"ERROR: Fallo en get_week_daily_amounts: {e}")
         return []
 
-def get_week_employees_earnings():
-    """Obtener los montos de ganancias de empleados de la semana actual (lunes a domingo)."""
+def get_week_employees_earnings(start_of_week, end_of_week):
+    """Obtener los montos de ganancias de empleados de la semana especificada."""
     try:
-        today = get_current_time().date()
-        days_since_monday = today.weekday()
-        start_of_week = today - timedelta(days=days_since_monday)
-        end_of_week = start_of_week + timedelta(days=6) # Domingo
-
         print(f"\n--- DEBUG get_week_employees_earnings ---")
-        print(f"Fecha actual: {today.isoformat()}")
-        print(f"Inicio de semana (Lunes): {start_of_week.isoformat()}")
-        print(f"Fin de semana para consulta (Domingo): {end_of_week.isoformat()}")
+        print(f"Inicio de semana: {start_of_week.isoformat()}")
+        print(f"Fin de semana: {end_of_week.isoformat()}")
 
-        # 1. Obtener todos los registros de asistencia (niños y trabajadoras) de la semana en una sola consulta.
         asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
         
         if not (hasattr(asistencia_response, 'data') and asistencia_response.data):
-            print("DEBUG: No se encontraron registros de asistencia para la semana en get_week_employees_earnings.")
             return []
 
-        print(f"DEBUG: Registros de asistencia obtenidos para ganancias de empleados: {asistencia_response.data}")
-
-        # 2. Calcular el total de montos de niños y horas de trabajadoras por día
         daily_summary = {}
         for item in asistencia_response.data:
             fecha = item['fecha']
@@ -770,18 +740,13 @@ def get_week_employees_earnings():
             elif tipo == 'trabajadora':
                 daily_summary[fecha]['total_empleados_horas'] += valor
         
-        print(f"DEBUG: Resumen diario de montos/horas: {daily_summary}")
-
-        # 3. Calcular el pago por hora para cada día
         daily_payment_per_hour = {}
         for fecha, data in daily_summary.items():
             pago_por_hora = 0
             if data['total_empleados_horas'] > 0:
                 pago_por_hora = data['total_ninos_monto'] / data['total_empleados_horas']
             daily_payment_per_hour[fecha] = pago_por_hora
-        print(f"DEBUG: Pago por hora diario: {daily_payment_per_hour}")
 
-        # 4. Calcular las ganancias de cada empleado
         employee_earnings = {}
         employee_ids_in_week = set()
 
@@ -802,19 +767,12 @@ def get_week_employees_earnings():
                 employee_earnings[id_persona]['dias_trabajados'].add(fecha)
                 employee_ids_in_week.add(id_persona)
         
-        print(f"DEBUG: Ganancias de empleados calculadas (por ID): {employee_earnings}")
-        print(f"DEBUG: IDs de empleados con ganancias esta semana: {employee_ids_in_week}")
-
-
-        # 5. Obtener los nombres de todos los empleados relevantes en una sola consulta
         employee_names_map = {}
         if employee_ids_in_week:
             employees_data_response = supabase.from_('employees').select('id, nombre').in_('id', list(employee_ids_in_week)).execute()
             if hasattr(employees_data_response, 'data'):
                 employee_names_map = {item['id']: item['nombre'] for item in employees_data_response.data}
-        print(f"DEBUG: Mapa de nombres de empleados: {employee_names_map}")
         
-        # 6. Formatear la salida para el frontend
         final_earnings = []
         for id_persona, data in employee_earnings.items():
             nombre = employee_names_map.get(id_persona, 'Nombre no encontrado')
@@ -822,14 +780,12 @@ def get_week_employees_earnings():
                 'nombre': nombre,
                 'total_horas': data['total_horas'],
                 'total_ganancia': data['total_ganancia'],
-                'dias_trabajados': len(data['dias_trabajados']) # Contar días únicos trabajados
+                'dias_trabajados': len(data['dias_trabajados'])
             })
 
-        # Opcional: Ordenar las ganancias finales si lo necesitas
         final_earnings.sort(key=lambda x: x['total_ganancia'], reverse=True)
         
         print(f"DEBUG: Ganancias finales de empleados para el frontend: {final_earnings}")
-        print(f"--- FIN DEBUG get_week_employees_earnings ---")
         return final_earnings
 
     except Exception as e:

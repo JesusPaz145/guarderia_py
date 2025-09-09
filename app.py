@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from datetime import datetime, timedelta
 from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_employees, add_employee, update_employee, delete_employee,
                       get_active_employees_count, get_active_ninos, get_active_employees,
@@ -26,10 +27,31 @@ def login():
     return render_template('login.html', error=error)
 
 @app.route('/dashboard')
-def dashboard():
+@app.route('/dashboard/<date>')
+def dashboard(date=None):
     if 'user' not in session:
         return redirect(url_for('login'))
-    
+
+    if date:
+        try:
+            current_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            current_date = get_current_time().date()
+    else:
+        current_date = get_current_time().date()
+
+    # Calcular inicio y fin de la semana (Lunes a Sábado)
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    end_of_week = start_of_week + timedelta(days=5)
+
+    # Calcular semanas anterior y siguiente
+    prev_week_start = start_of_week - timedelta(days=7)
+    next_week_start = start_of_week + timedelta(days=7)
+
+    # Formatear fechas para la plantilla
+    week_start_str = start_of_week.strftime('%B %d')
+    week_end_str = end_of_week.strftime('%B %d')
+
     # Obtener el número de empleados activos
     active_employees_count = get_active_employees_count()
     
@@ -37,13 +59,13 @@ def dashboard():
     today_ninos_total = get_today_ninos_total()
     today_payment_per_hour = get_today_payment_per_hour()
     
-    # Obtener datos de la semana actual
-    week_ninos_unique_count = get_week_ninos_unique_count()
-    week_ninos_total = get_week_ninos_total()
+    # Obtener datos de la semana
+    week_ninos_unique_count = get_week_ninos_unique_count(start_of_week, end_of_week)
+    week_ninos_total = get_week_ninos_total(start_of_week, end_of_week)
     
     # Obtener datos para el gráfico semanal
-    week_daily_amounts = get_week_daily_amounts()
-    week_employees_earnings = get_week_employees_earnings()
+    week_daily_amounts = get_week_daily_amounts(start_of_week, end_of_week)
+    week_employees_earnings = get_week_employees_earnings(start_of_week, end_of_week)
     
     return render_template('dashboard.html', 
                            active_page='dashboard',
@@ -53,7 +75,11 @@ def dashboard():
                            week_ninos_unique_count=week_ninos_unique_count,
                            week_ninos_total=week_ninos_total,
                            week_daily_amounts=week_daily_amounts,
-                           week_employees_earnings=week_employees_earnings)
+                           week_employees_earnings=week_employees_earnings,
+                           week_start_str=week_start_str,
+                           week_end_str=week_end_str,
+                           prev_week_start_str=prev_week_start.strftime('%Y-%m-%d'),
+                           next_week_start_str=next_week_start.strftime('%Y-%m-%d'))
 
 @app.route('/ninos')
 def ninos():
