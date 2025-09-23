@@ -7,7 +7,8 @@ from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_date_ninos_asistencia, get_date_employees_asistencia,
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
-                      get_current_time, add_pago, get_recent_pagos, get_pending_payments)
+                      get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
+                      get_week_gastos, add_gasto, update_gasto, delete_gasto)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -67,19 +68,108 @@ def dashboard(date=None):
     week_daily_amounts = get_week_daily_amounts(start_of_week, end_of_week)
     week_employees_earnings = get_week_employees_earnings(start_of_week, end_of_week)
     
+    # Get weekly expenses
+    week_gastos_total = get_week_gastos(start_of_week, end_of_week)
+    if week_gastos_total is None:
+        week_gastos_total = 0
+
     return render_template('dashboard.html', 
-                           active_page='dashboard',
-                           active_employees_count=active_employees_count,
+                           week_start_str=start_of_week.strftime('%Y-%m-%d'),
+                           week_end_str=end_of_week.strftime('%Y-%m-%d'),
+                           prev_week_start_str=prev_week_start.strftime('%Y-%m-%d'),
+                           next_week_start_str=next_week_start.strftime('%Y-%m-%d'),
                            today_ninos_total=today_ninos_total,
                            today_payment_per_hour=today_payment_per_hour,
                            week_ninos_unique_count=week_ninos_unique_count,
                            week_ninos_total=week_ninos_total,
+                           week_gastos_total=week_gastos_total,
+                           active_employees_count=active_employees_count,
                            week_daily_amounts=week_daily_amounts,
-                           week_employees_earnings=week_employees_earnings,
+                           week_employees_earnings=week_employees_earnings)
+
+@app.route('/gastos')
+@app.route('/gastos/<date>')
+def gastos(date=None):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    if date:
+        try:
+            current_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            current_date = get_current_time().date()
+    else:
+        current_date = get_current_time().date()
+
+    # Calcular inicio y fin de la semana (Lunes a Sábado)
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    end_of_week = start_of_week + timedelta(days=5)
+
+    # Calcular semanas anterior y siguiente
+    prev_week_start = start_of_week - timedelta(days=7)
+    next_week_start = start_of_week + timedelta(days=7)
+
+    # Formatear fechas para la plantilla
+    week_start_str = start_of_week.strftime('%B %d')
+    week_end_str = end_of_week.strftime('%B %d')
+
+    # Obtener gastos de la semana
+    gastos, total_gastos = get_week_gastos(start_of_week, end_of_week)
+    
+    # Debug: Imprimir los gastos
+    print("\n=== DEBUG: Datos de gastos ===")
+    print(f"Gastos recibidos: {gastos}")
+    print(f"Total gastos: {total_gastos}")
+    print("===========================\n")
+
+    return render_template('gastos.html', 
+                           active_page='gastos',
+                           gastos=gastos,
+                           total_gastos=total_gastos,
                            week_start_str=week_start_str,
                            week_end_str=week_end_str,
                            prev_week_start_str=prev_week_start.strftime('%Y-%m-%d'),
                            next_week_start_str=next_week_start.strftime('%Y-%m-%d'))
+
+@app.route('/api/gastos', methods=['POST'])
+def crear_gasto():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        result = add_gasto(
+            data['fecha'],
+            data['motivo'],
+            data['monto']
+        )
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al crear el gasto'}), 500
+    except Exception as e:
+        print(f"Error al crear gasto: {e}")
+        return jsonify({'error': str(e)}), 500
+    try:
+        data = request.json
+        print(f"\n=== Actualizando gasto {id} ===")
+        print(f"Datos recibidos: {data}")
+        
+        if not all(key in data for key in ['fecha', 'motivo', 'monto']):
+            return jsonify({'error': 'Faltan campos requeridos'}), 400
+        
+        try:
+            monto = float(data['monto'])
+        except ValueError:
+            return jsonify({'error': 'El monto debe ser un número válido'}), 400
+            
+        result = update_gasto(id, data['fecha'], data['motivo'], monto)
+        print(f"Resultado de la actualización: {result}")
+        
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al actualizar el gasto'}), 500
+    except Exception as e:
+        print(f"Error al actualizar gasto: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/ninos')
 def ninos():
@@ -405,6 +495,42 @@ def eliminar_asistencia(id):
     except Exception as e:
         print(f"Error al eliminar asistencia: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gastos/<int:id>', methods=['PUT'])
+def actualizar_gasto(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        print(f"\n=== Actualizando gasto {id} ===")
+        print(f"Datos recibidos: {data}")
+        
+        if not all(key in data for key in ['fecha', 'motivo', 'monto']):
+            return jsonify({'error': 'Faltan campos requeridos'}), 400
+        
+        try:
+            monto = float(data['monto'])
+        except ValueError:
+            return jsonify({'error': 'El monto debe ser un número válido'}), 400
+            
+        result = update_gasto(id, data['fecha'], data['motivo'], monto)
+        print(f"Resultado de la actualización: {result}")
+        
+        if result:
+            return jsonify({'success': True, 'data': result})
+        return jsonify({'error': 'Error al actualizar el gasto'}), 500
+    except Exception as e:
+        print(f"Error al actualizar gasto: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gastos/<int:id>', methods=['DELETE'])
+def eliminar_gasto(id):
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': 'No autorizado'}), 401
+    
+    if delete_gasto(id):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Error al eliminar el gasto'})
 
 @app.route('/logout', methods=['GET', 'POST'])
 def logout():

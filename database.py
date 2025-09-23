@@ -8,7 +8,9 @@ import pytz
 
 def get_current_time():
     """Returns the current time in 'America/Chicago' timezone."""
-    return datetime.now(pytz.timezone('America/Chicago'))
+    utc_now = datetime.now(pytz.UTC)
+    local_tz = pytz.timezone('America/Chicago')
+    return utc_now.astimezone(local_tz)
 
 # Cargar variables de entorno
 load_dotenv()
@@ -721,11 +723,25 @@ def get_week_employees_earnings(start_of_week, end_of_week):
         print(f"Inicio de semana: {start_of_week.isoformat()}")
         print(f"Fin de semana: {end_of_week.isoformat()}")
 
+        # Obtener asistencias
         asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
         
         if not (hasattr(asistencia_response, 'data') and asistencia_response.data):
             return []
 
+        # Obtener gastos diarios
+        gastos_response = supabase.from_('gastos').select('fecha, monto').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
+        
+        # Inicializar diccionario de gastos diarios
+        daily_gastos = {}
+        if hasattr(gastos_response, 'data'):
+            for gasto in gastos_response.data:
+                fecha = gasto['fecha']
+                if fecha not in daily_gastos:
+                    daily_gastos[fecha] = 0
+                daily_gastos[fecha] += float(gasto.get('monto', 0))
+
+        # Procesar asistencias diarias
         daily_summary = {}
         for item in asistencia_response.data:
             fecha = item['fecha']
@@ -740,12 +756,18 @@ def get_week_employees_earnings(start_of_week, end_of_week):
             elif tipo == 'trabajadora':
                 daily_summary[fecha]['total_empleados_horas'] += valor
         
+        # Calcular pago por hora teniendo en cuenta los gastos
         daily_payment_per_hour = {}
         for fecha, data in daily_summary.items():
             pago_por_hora = 0
             if data['total_empleados_horas'] > 0:
-                pago_por_hora = data['total_ninos_monto'] / data['total_empleados_horas']
+                # Restar los gastos del día (si existen) del monto total
+                gastos_del_dia = daily_gastos.get(fecha, 0)
+                ingreso_neto = data['total_ninos_monto'] - gastos_del_dia
+                if ingreso_neto > 0:  # Solo si hay ganancia después de gastos
+                    pago_por_hora = ingreso_neto / data['total_empleados_horas']
             daily_payment_per_hour[fecha] = pago_por_hora
+            print(f"DEBUG - Fecha: {fecha}, Monto: {data['total_ninos_monto']}, Gastos: {daily_gastos.get(fecha, 0)}, Horas: {data['total_empleados_horas']}, Pago/hora: {pago_por_hora}")
 
         employee_earnings = {}
         employee_ids_in_week = set()
@@ -927,3 +949,67 @@ def get_pending_payments():
     except Exception as e:
         print(f"Error al obtener pagos pendientes: {e}")
         return []
+
+def get_week_gastos(start_date, end_date):
+    """Obtener todos los gastos de la semana"""
+    try:
+        print(f"\n=== Obteniendo gastos de la semana: {start_date} a {end_date} ===")
+        response = supabase.from_('gastos').select('*').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).order('fecha', desc=True).execute()
+        
+        if hasattr(response, 'data'):
+            total_gastos = 0
+            for gasto in response.data:
+                monto = float(gasto.get('monto', 0))
+                total_gastos += monto
+            print(f"Total gastos de la semana: ${total_gastos}")
+            return total_gastos
+        return 0
+    except Exception as e:
+        print(f"Error al obtener gastos de la semana: {e}")
+        return 0
+            
+
+
+        return [], 0
+    except Exception as e:
+        print(f"Error al obtener gastos de la semana: {e}")
+        return [], 0
+
+def add_gasto(fecha, motivo, monto):
+    """Agregar un nuevo gasto a la base de datos."""
+    try:
+        data = {
+            "fecha": fecha,
+            "motivo": motivo,
+            "monto": float(monto)
+        }
+        response = supabase.table('gastos').insert(data).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error al agregar gasto: {e}")
+        return None
+
+def update_gasto(id, fecha, motivo, monto):
+    """Actualizar un gasto existente"""
+    try:
+        print(f"\n=== Actualizando gasto {id} ===")
+        data = {
+            "fecha": fecha,
+            "motivo": motivo,
+            "monto": float(monto)
+        }
+        response = supabase.from_('gastos').update(data).eq('id', id).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        print(f"Error al actualizar gasto: {e}")
+        return None
+
+def delete_gasto(id):
+    """Eliminar un gasto"""
+    try:
+        print(f"\n=== Eliminando gasto {id} ===")
+        response = supabase.from_('gastos').delete().eq('id', id).execute()
+        return True
+    except Exception as e:
+        print(f"Error al eliminar gasto: {e}")
+        return False

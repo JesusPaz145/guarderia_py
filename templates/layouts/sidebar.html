@@ -26,6 +26,12 @@
                 </a>
             </li>
             <li>
+                <a href="{{ url_for('gastos') }}" class="sidebar-item flex items-center py-3 px-6 {% if active_page == 'gastos' %}active{% endif %}">
+                    <i class="fas fa-file-invoice-dollar w-6 mr-3"></i>
+                    <span>Gastos</span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ url_for('ninos') }}" class="sidebar-item flex items-center py-3 px-6 {% if active_page == 'ninos' %}active{% endif %}">
                     <i class="fas fa-baby w-6 mr-3"></i>
                     <span>Niños</span>

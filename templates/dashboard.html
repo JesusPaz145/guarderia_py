@@ -43,15 +43,24 @@
           <p class="text-pink-500 text-sm mt-2">Niños únicos que han asistido esta semana</p>
         </div>
 
-        <!-- Tarjeta: Monto Semanal -->
-        <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-pink-100 transform transition-all duration-300 hover:scale-[1.02]">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-xl font-semibold text-pink-600">Monto Semanal</h3>
-            <i class="fas fa-dollar-sign text-pink-400 text-3xl"></i>
+        <!-- Tarjeta: Monto - Gasto -->
+        <a href="{{ url_for('gastos') }}" class="block">
+          <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-pink-100 transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xl font-semibold text-pink-600">Monto - Gasto</h3>
+              <i class="fas fa-balance-scale text-pink-400 text-3xl"></i>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center space-x-2 mb-2">
+                <p class="text-xl font-bold text-green-600">${{ "%.2f"|format(week_ninos_total) }}</p>
+                <p class="text-xl font-bold text-red-600">- ${{ "%.2f"|format(week_gastos_total) }}</p>
+              </div>
+              <div class="pt-2 border-t border-pink-100">
+                <p class="text-3xl font-bold text-pink-800">${{ "%.2f"|format(week_ninos_total - week_gastos_total) }}</p>
+              </div>
+            </div>
           </div>
-          <p class="text-4xl font-bold text-pink-800">${{ week_ninos_total }}</p>
-          <p class="text-pink-500 text-sm mt-2">Ingresos totales de la semana</p>
-        </div>
+        </a>
 
         <!-- Tarjeta: Cantidad de trabajadoras activas -->
         <a href="{{ url_for('employees') }}" class="block">

@@ -1,0 +1,75 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Gastos - Guardería{% endblock %}
+
+{% block content %}
+<!-- Debug info -->
+<div class="bg-gray-100 p-4 mb-4">
+    <h2 class="font-bold">Debug Info:</h2>
+    <pre>{{ gastos | tojson(indent=2) if gastos else '[]' }}</pre>
+</div>
+
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-4">Lista de Gastos</h1>
+    
+    <table class="min-w-full bg-white shadow-md rounded-lg">
+        <thead>
+            <tr>
+                <th class="px-4 py-2 text-left">Fecha</th>
+                <th class="px-4 py-2 text-left">Motivo</th>
+                <th class="px-4 py-2 text-left">Monto</th>
+                <th class="px-4 py-2 text-left">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for gasto in gastos %}
+            <tr class="border-t">
+                <td class="px-4 py-2">{{ gasto.fecha }}</td>
+                <td class="px-4 py-2">{{ gasto.motivo }}</td>
+                <td class="px-4 py-2">${{ "%.2f"|format(gasto.monto) }}</td>
+                <td class="px-4 py-2">
+                    <button onclick="editarGasto({{ gasto.id }})" 
+                            class="bg-blue-500 text-white px-2 py-1 rounded">
+                        Editar
+                    </button>
+                    <button onclick="eliminarGasto({{ gasto.id }})" 
+                            class="bg-red-500 text-white px-2 py-1 rounded ml-2">
+                        Eliminar
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editarGasto(id) {
+    console.log('Función editarGasto llamada con id:', id);
+    alert('Editar gasto ' + id);
+}
+
+function eliminarGasto(id) {
+    console.log('Función eliminarGasto llamada con id:', id);
+    if (confirm('¿Estás seguro de eliminar el gasto ' + id + '?')) {
+        fetch('/api/gastos/' + id, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error al eliminar');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al eliminar');
+        });
+    }
+}
+</script>
+{% endblock %}
