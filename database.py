@@ -957,12 +957,25 @@ def get_week_gastos(start_date, end_date):
         response = supabase.from_('gastos').select('*').gte('fecha', start_date.isoformat()).lte('fecha', end_date.isoformat()).order('fecha', desc=True).execute()
         
         if hasattr(response, 'data'):
+            gastos_converted = []
             total_gastos = 0
+            
             for gasto in response.data:
                 monto = float(gasto.get('monto', 0))
                 total_gastos += monto
+                
+                converted = {
+                    'id': gasto.get('id'),
+                    'fecha': gasto.get('fecha'),
+                    'motivo': gasto.get('motivo', ''),
+                    'monto': monto
+                }
+                gastos_converted.append(converted)
+            
             print(f"Total gastos de la semana: ${total_gastos}")
-            return total_gastos
+            return gastos_converted, total_gastos
+            
+        return [], 0
         return 0
     except Exception as e:
         print(f"Error al obtener gastos de la semana: {e}")

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from datetime import datetime, timedelta
+import pytz
 from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_employees, add_employee, update_employee, delete_employee,
                       get_active_employees_count, get_active_ninos, get_active_employees,
@@ -69,7 +70,7 @@ def dashboard(date=None):
     week_employees_earnings = get_week_employees_earnings(start_of_week, end_of_week)
     
     # Get weekly expenses
-    week_gastos_total = get_week_gastos(start_of_week, end_of_week)
+    _, week_gastos_total = get_week_gastos(start_of_week, end_of_week)
     if week_gastos_total is None:
         week_gastos_total = 0
 
@@ -113,14 +114,22 @@ def gastos(date=None):
     week_start_str = start_of_week.strftime('%B %d')
     week_end_str = end_of_week.strftime('%B %d')
 
-    # Obtener gastos de la semana
-    gastos, total_gastos = get_week_gastos(start_of_week, end_of_week)
+    # Asegurarnos de que las fechas estén en UTC para Supabase
+    start_utc = datetime.combine(start_of_week, datetime.min.time()).astimezone(pytz.UTC)
+    end_utc = datetime.combine(end_of_week, datetime.max.time()).astimezone(pytz.UTC)
     
-    # Debug: Imprimir los gastos
-    print("\n=== DEBUG: Datos de gastos ===")
-    print(f"Gastos recibidos: {gastos}")
-    print(f"Total gastos: {total_gastos}")
-    print("===========================\n")
+    # Obtener gastos de la semana
+    try:
+        gastos, total_gastos = get_week_gastos(start_utc, end_utc)
+        
+        # Debug: Imprimir los gastos
+        print("\n=== DEBUG: Datos de gastos ===")
+        print(f"Gastos recibidos: {gastos}")
+        print(f"Total gastos: {total_gastos}")
+        print("===========================\n")
+    except Exception as e:
+        print(f"Error al obtener gastos: {e}")
+        gastos, total_gastos = [], 0
 
     return render_template('gastos.html', 
                            active_page='gastos',
