@@ -116,9 +116,11 @@
       </div>
 
       <!-- Botón flotante para agregar asistencia -->
+      {% if session.get('user_level') == 'Admin' %}
       <button id="addAttendanceBtn" class="fixed bottom-6 right-6 w-16 h-16 bg-pink-500 hover:bg-pink-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-50 flex items-center justify-center">
         <i class="fas fa-plus text-2xl"></i>
       </button>
+      {% endif %}
 
       <!-- Modal principal para agregar asistencia -->
       <div id="attendanceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">

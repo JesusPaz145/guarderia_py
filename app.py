@@ -9,10 +9,28 @@ from database import (get_ninos, add_nino, update_nino, delete_nino,
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
                       get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
-                      get_week_gastos, add_gasto, update_gasto, delete_gasto)
+                      get_week_gastos, add_gasto, update_gasto, delete_gasto,
+                      verify_employee_credentials)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
+
+# Helper para verificar si el usuario es admin en las plantillas
+@app.context_processor
+def utility_processor():
+    def is_admin():
+        return 'user_level' in session and session['user_level'] == 'Admin'
+    return dict(is_admin=is_admin)
+
+from functools import wraps
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_level' not in session or session['user_level'] != 'Admin':
+            return jsonify({'error': 'No autorizado'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
@@ -21,8 +39,13 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username == 'admin' and password == 'admin':
+        
+        employee = verify_employee_credentials(username, password)
+        if employee:
             session['user'] = username
+            session['user_id'] = employee['id']
+            session['user_name'] = employee['nombre']
+            session['user_level'] = employee['nivel']
             return redirect(url_for('dashboard'))
         else:
             error = 'Usuario o contraseña incorrectos'
@@ -141,6 +164,7 @@ def gastos(date=None):
                            next_week_start_str=next_week_start.strftime('%Y-%m-%d'))
 
 @app.route('/api/gastos', methods=['POST'])
+@admin_required
 def crear_gasto():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
@@ -190,6 +214,7 @@ def ninos():
     return render_template('ninos.html', active_page='ninos', ninos=ninos_list)
 
 @app.route('/api/ninos', methods=['POST'])
+@admin_required
 def crear_nino():
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
@@ -205,6 +230,7 @@ def crear_nino():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/ninos/<int:id>', methods=['PUT'])
+@admin_required
 def actualizar_nino(id):
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
@@ -235,6 +261,7 @@ def actualizar_nino(id):
         return jsonify({'error': f'Error del servidor: {str(e)}'}), 500
 
 @app.route('/api/ninos/<int:id>', methods=['DELETE'])
+@admin_required
 def eliminar_nino(id):
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401
@@ -506,6 +533,7 @@ def eliminar_asistencia(id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/gastos/<int:id>', methods=['PUT'])
+@admin_required
 def actualizar_gasto(id):
     if 'user' not in session:
         return jsonify({'error': 'No autorizado'}), 401

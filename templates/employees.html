@@ -31,10 +31,12 @@
     <h1 class="text-4xl font-extrabold text-pink-700 tracking-tight drop-shadow-sm">
       Gestión de Trabajadoras
     </h1>
+    {% if session.get('user_level') == 'Admin' %}
     <button class="bg-pink-400 hover:bg-pink-500 text-white px-6 py-2 rounded-xl shadow-lg transition-all duration-200 flex items-center space-x-2">
       <i class="fas fa-plus"></i>
       <span>Agregar Trabajadora</span>
     </button>
+    {% endif %}
   </div>
 
   <!-- Tabla de Trabajadoras -->
@@ -75,12 +77,14 @@
                 {% endif %}
             </td>
             <td class="px-6 py-4 text-center space-x-2">
+              {% if session.get('user_level') == 'Admin' %}
               <button class="text-blue-500 hover:text-blue-700" onclick="editarEmployee({{ employee.id }})">
                 <i class="fas fa-edit"></i>
               </button>
               <button class="text-red-500 hover:text-red-700" onclick="eliminarEmployee({{ employee.id }})">
                 <i class="fas fa-trash"></i>
               </button>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

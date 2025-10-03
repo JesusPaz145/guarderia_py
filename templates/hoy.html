@@ -49,6 +49,7 @@
                   <td class="px-4 py-4 font-medium text-pink-800">{{ nino.nombre }}</td>
                   <td class="px-4 py-4 text-pink-700">${{ nino.valor }}</td>
                   <td class="px-4 py-4">
+                    {% if session.get('user_level') == 'Admin' %}
                     <div class="flex space-x-2">
                       <button onclick="editNinoAsistencia({{ nino.id }}, '{{ nino.nombre }}', {{ nino.valor }})" 
                               class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
@@ -59,6 +60,7 @@
                         <i class="fas fa-trash mr-1"></i>Eliminar
                       </button>
                     </div>
+                    {% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -102,6 +104,7 @@
                   <td class="px-4 py-4 text-blue-700">$ {{ (employee.valor * pago_por_hora)|round(2) }}</td>
                   <td class="px-4 py-4">
                     <div class="flex space-x-2">
+                      {% if session.get('user_level') == 'Admin' %}
                       <button onclick="editEmployeeAsistencia({{ employee.id }}, '{{ employee.nombre }}', {{ employee.valor }})" 
                               class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
                         <i class="fas fa-edit mr-1"></i>Editar
@@ -110,6 +113,7 @@
                               class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200">
                         <i class="fas fa-trash mr-1"></i>Eliminar
                       </button>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
@@ -126,9 +130,11 @@
       </div>
 
       <!-- Botón flotante para agregar asistencia -->
+      {% if session.get('user_level') == 'Admin' %}
       <button id="addAttendanceBtn" class="fixed bottom-6 right-6 w-16 h-16 bg-pink-500 hover:bg-pink-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300 z-50 flex items-center justify-center">
         <i class="fas fa-plus text-2xl"></i>
       </button>
+      {% endif %}
 
       <!-- Modal principal para agregar asistencia -->
       <div id="attendanceModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
@@ -137,6 +143,7 @@
             <h2 class="text-2xl font-bold text-pink-700 mb-6">Agregar Asistencia</h2>
             
             <div class="space-y-4">
+              {% if session.get('user_level') == 'Admin' %}
               <button onclick="showNinoModal()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
                 <i class="fas fa-baby mr-3"></i>
                 Niño
@@ -146,6 +153,7 @@
                 Niños
               </button>
               <button onclick="showEmployeeModal()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+              {% endif %}
                 <i class="fas fa-user-tie mr-3"></i>
                 Empleada
               </button>
@@ -344,7 +352,8 @@
     document.getElementById('confirmEmployeeModal').classList.add('flex');
     document.getElementById('selectedEmployeeName').textContent = employee.nombre;
     document.getElementById('employeeFecha').value = currentDate;
-    document.getElementById('employeeHoras').value = 8;
+    // Usar las horas predeterminadas del empleado o 8 como respaldo
+    document.getElementById('employeeHoras').value = employee.horas || 8;
   }
   
   // Función para navegar entre días
@@ -504,6 +513,7 @@
           <div class="flex flex-col items-center">
             <i class="fas fa-user-tie text-blue-400 text-2xl mb-2"></i>
             <h3 class="font-semibold text-blue-700 text-sm">${employee.nombre}</h3>
+            <p class="text-xs text-blue-600 mt-1">${employee.horas} horas/día</p>
           </div>
         `;
         

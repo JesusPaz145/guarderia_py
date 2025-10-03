@@ -25,40 +25,47 @@
             <h2 class="text-xl font-semibold text-gray-700">Total de Gastos de la Semana</h2>
             <p class="text-4xl font-bold text-pink-600">${{ "%.2f"|format(total_gastos) }}</p>
         </div>
+        {% if session.get('user_level') == 'Admin' %}
         <button onclick="abrirModalNuevo()" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300">
             + Agregar Gasto
         </button>
+        {% endif %}
     </div>
     
     <!-- Tabla de Gastos -->
     <div class="bg-white shadow-lg rounded-lg overflow-hidden">
-        <table class="min-w-full">
-            <thead class="bg-pink-50">
-                <tr>
-                    <th class="px-6 py-4 text-left text-sm font-semibold text-pink-800">Fecha</th>
-                    <th class="px-6 py-4 text-left text-sm font-semibold text-pink-800">Motivo</th>
-                    <th class="px-6 py-4 text-left text-sm font-semibold text-pink-800">Monto</th>
-                    <th class="px-6 py-4 text-center text-sm font-semibold text-pink-800">Acciones</th>
-                </tr>
-            </thead>
-        <tbody>
-            {% for gasto in gastos %}
-            <tr class="border-t hover:bg-pink-50/50 transition-colors" data-id="{{ gasto.id }}" data-fecha="{{ gasto.fecha }}">
-                <td class="px-6 py-4">{{ gasto.fecha }}</td>
-                <td class="px-6 py-4">{{ gasto.motivo }}</td>
-                <td class="px-6 py-4">${{ "%.2f"|format(gasto.monto) }}</td>
-                <td class="px-6 py-4 text-center">
-                    <button onclick="editarGasto('{{ gasto.id }}')" 
-                            class="bg-pink-500 text-white px-3 py-1 rounded-lg hover:bg-pink-600 transition duration-300">
-                        Editar
-                    </button>
-                    <button onclick="eliminarGasto('{{ gasto.id }}')" 
-                            class="bg-red-500 text-white px-3 py-1 rounded-lg ml-2 hover:bg-red-600 transition duration-300">
-                        Eliminar
-                    </button>
-                </td>
-            </tr>
-            {% endfor %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-pink-50">
+                    <tr>
+                        <th class="px-4 sm:px-6 py-4 text-left text-sm font-semibold text-pink-800">Fecha</th>
+                        <th class="px-4 sm:px-6 py-4 text-left text-sm font-semibold text-pink-800">Motivo</th>
+                        <th class="px-4 sm:px-6 py-4 text-left text-sm font-semibold text-pink-800">Monto</th>
+                        <th class="px-4 sm:px-6 py-4 text-center text-sm font-semibold text-pink-800">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gasto in gastos %}
+                    <tr class="border-t hover:bg-pink-50/50 transition-colors" data-id="{{ gasto.id }}" data-fecha="{{ gasto.fecha }}">
+                        <td class="px-4 sm:px-6 py-4 whitespace-nowrap">{{ gasto.fecha }}</td>
+                        <td class="px-4 sm:px-6 py-4">{{ gasto.motivo }}</td>
+                        <td class="px-4 sm:px-6 py-4">${{ "%.2f"|format(gasto.monto) }}</td>
+                        <td class="px-4 sm:px-6 py-4 flex justify-center gap-2 flex-wrap">
+                            {% if session.get('user_level') == 'Admin' %}
+                            <button onclick="editarGasto('{{ gasto.id }}')" 
+                                    class="bg-pink-500 text-white px-3 py-1 rounded-lg hover:bg-pink-600 transition duration-300 text-sm">
+                                <span class="hidden sm:inline">Editar</span>
+                                <i class="fas fa-edit sm:hidden"></i>
+                            </button>
+                            <button onclick="eliminarGasto('{{ gasto.id }}')" 
+                                    class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition duration-300 text-sm">
+                                <span class="hidden sm:inline">Eliminar</span>
+                                <i class="fas fa-trash sm:hidden"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
         </tbody>
     </table>
 </div>

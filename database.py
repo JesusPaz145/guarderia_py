@@ -29,6 +29,25 @@ try:
 except Exception as e:
     print(f"Error al crear cliente de Supabase: {e}")
 
+def verify_employee_credentials(usuario, contrasena):
+    """Verificar credenciales del empleado y retornar sus datos si son válidos"""
+    try:
+        print(f"\n=== Verificando credenciales para usuario: {usuario} ===")
+        response = supabase.from_('employees').select('*').eq('usuario', usuario).eq('contrasena', contrasena).eq('status', 1).execute()
+        
+        if hasattr(response, 'data') and len(response.data) > 0:
+            employee = response.data[0]
+            return {
+                'id': employee['id'],
+                'nombre': employee['nombre'],
+                'nivel': employee['nivel'],
+                'status': employee['status']
+            }
+        return None
+    except Exception as e:
+        print(f"Error al verificar credenciales: {e}")
+        return None
+
 def get_ninos():
     """Obtener todos los niños de la base de datos"""
     try:
