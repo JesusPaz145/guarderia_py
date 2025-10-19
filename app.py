@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from datetime import datetime, timedelta
 import pytz
-from database import (get_ninos, add_nino, update_nino, delete_nino,
+from database import (
+                      get_nino, get_ninos, add_nino, update_nino, delete_nino,
                       get_employees, add_employee, update_employee, delete_employee,
                       get_active_employees_count, get_active_ninos, get_active_employees,
                       add_asistencia, get_today_ninos_total, get_today_payment_per_hour,
@@ -10,7 +11,7 @@ from database import (get_ninos, add_nino, update_nino, delete_nino,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
                       get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
                       get_week_gastos, add_gasto, update_gasto, delete_gasto,
-                      verify_employee_credentials)
+                      verify_employee_credentials, get_ninos_con_deuda)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -453,7 +454,7 @@ def crear_pago():
         result = add_pago(
             data['fecha'],
             data['id_nino'],
-            data['id_empleado'],
+            int(data['id_empleado']), # Asegurarse de que el ID del empleado sea un entero
             data['monto'],
             data['tipo']
         )
@@ -462,6 +463,51 @@ def crear_pago():
         return jsonify({'error': 'Error al crear el pago'}), 500
     except Exception as e:
         print(f"Error al crear pago: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/registrar_pago_multiple', methods=['POST'])
+def registrar_pago_multiple():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        pagos = data.get('pagos', [])
+
+        if not pagos:
+            return jsonify({'error': 'No se enviaron pagos para registrar.'}), 400
+
+        pagos_realizados = 0
+        for pago in pagos:
+            try:
+                id_nino = int(pago.get('id_nino'))
+                monto = float(pago.get('monto'))
+                id_empleado = int(pago.get('id_empleado'))
+                fecha = pago.get('fecha')
+                tipo = pago.get('tipo')
+
+                if not all([id_nino, monto, id_empleado, fecha, tipo]):
+                    continue
+
+                result = add_pago(fecha, id_nino, id_empleado, monto, tipo)
+                if result:
+                    pagos_realizados += 1
+            except (ValueError, TypeError) as e:
+                print(f"Error procesando pago individual: {e}")
+                continue
+        
+        if pagos_realizados < len(pagos):
+            error_msg = f"Se procesaron {len(pagos)} pagos, pero solo {pagos_realizados} tuvieron éxito."
+            print(f"Error en registrar_pago_multiple: {error_msg}")
+            # Decide if this should be a client error or server error
+            return jsonify({'error': error_msg, 'success': False}), 207 # Multi-Status
+
+        if pagos_realizados == 0 and len(pagos) > 0:
+            return jsonify({'error': 'Ninguno de los pagos pudo ser registrado.'}), 500
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"Error al registrar pago múltiple: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/asistencia', methods=['POST'])
@@ -569,6 +615,51 @@ def eliminar_gasto(id):
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'Error al eliminar el gasto'})
 
+@app.route('/api/ninos', methods=['GET'])
+def api_get_ninos():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        ninos = get_ninos()
+        return jsonify(ninos)
+    except Exception as e:
+        print(f"Error al obtener niños: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ninos/con_deuda', methods=['GET'])
+def api_get_ninos_con_deuda():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        ninos = get_ninos_con_deuda()
+        return jsonify(ninos)
+    except Exception as e:
+        print(f"Error al obtener niños con deuda: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gastos/ajustar_pagos', methods=['POST'])
+@admin_required
+def ajustar_pagos():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        ninos_ids = data['ninos_ids']
+        fecha = data['fecha']
+
+        pending_payments = get_pending_payments()
+        pending_payments_dict = {str(p['id_nino']): p['saldo_pendiente'] for p in pending_payments}
+
+        for nino_id in ninos_ids:
+            monto_deuda = pending_payments_dict.get(nino_id, 0)
+            if monto_deuda > 0:
+                add_pago(fecha, nino_id, None, monto_deuda, 'Ajuste')
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error al ajustar pagos: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/logout', methods=['GET', 'POST'])
 def logout():
     session.pop('user', None)
@@ -579,5 +670,3 @@ if __name__ == '__main__':
 
 # Para Vercel
 app.debug = False
-False
-False
