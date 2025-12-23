@@ -1,13 +1,15 @@
 <!-- Barra Superior (Header) -->
-<header class="bg-white/80 backdrop-blur-md p-4 flex items-center justify-between shadow-lg z-50 fixed top-0 left-0 right-0 md:left-72">
+<header
+  class="bg-white/80 backdrop-blur-md p-4 flex items-center justify-between shadow-lg z-50 fixed top-0 left-0 right-0 md:left-72">
   <!-- Botón para abrir/cerrar sidebar en móviles -->
-  <button id="sidebar-toggle" class="md:hidden text-pink-600 text-2xl p-2 rounded-lg hover:bg-pink-100 focus:outline-none focus:ring-2 focus:ring-pink-300">
+  <button id="sidebar-toggle"
+    class="md:hidden text-pink-600 text-2xl p-2 rounded-lg hover:bg-pink-100 focus:outline-none focus:ring-2 focus:ring-pink-300">
     <i class="fas fa-bars"></i>
   </button>
 
   <!-- Logo en la barra superior (visible en pantallas grandes) -->
   <div class="hidden md:block text-2xl font-bold text-pink-600">
-    <i class="fas fa-paw text-pink-400 mr-2"></i>{% block header_title %}Dashboard{% endblock %}
+    <i class="fas fa-puzzle-piece text-pink-400 mr-2"></i>{% block header_title %}Dashboard{% endblock %}
   </div>
 
   <!-- Opción de Cerrar Sesión -->
