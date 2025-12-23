@@ -736,97 +736,86 @@ def get_week_daily_amounts(start_date, end_date):
         return []
 
 def get_week_employees_earnings(start_of_week, end_of_week):
-    """Obtener los montos de ganancias de empleados de la semana especificada."""
+    """Obtener los montos de ganancias de empleados de la semana especificada.
+       CALCULO SEMANAL: (Total Ingresos Semana - Total Gastos Semana) / Total Horas Semana
+    """
     try:
-        print(f"\n--- DEBUG get_week_employees_earnings ---")
-        print(f"Inicio de semana: {start_of_week.isoformat()}")
-        print(f"Fin de semana: {end_of_week.isoformat()}")
+        print(f"\n--- DEBUG get_week_employees_earnings (Weekly Calculation) ---")
+        start_date_str = start_of_week.isoformat()
+        end_date_str = end_of_week.isoformat()
 
-        # Obtener asistencias
-        asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
+        # 1. Obtener todas las asistencias de la semana
+        asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_date_str).lte('fecha', end_date_str).execute()
         
         if not (hasattr(asistencia_response, 'data') and asistencia_response.data):
             return []
 
-        # Obtener gastos diarios
-        gastos_response = supabase.from_('gastos').select('fecha, monto').gte('fecha', start_of_week.isoformat()).lte('fecha', end_of_week.isoformat()).execute()
+        # 2. Obtener todos los gastos de la semana
+        gastos_response = supabase.from_('gastos').select('monto').gte('fecha', start_date_str).lte('fecha', end_date_str).execute()
         
-        # Inicializar diccionario de gastos diarios
-        daily_gastos = {}
-        if hasattr(gastos_response, 'data'):
-            for gasto in gastos_response.data:
-                fecha = gasto['fecha']
-                if fecha not in daily_gastos:
-                    daily_gastos[fecha] = 0
-                daily_gastos[fecha] += float(gasto.get('monto', 0))
-
-        # Procesar asistencias diarias
-        daily_summary = {}
+        # 3. Calcular Totales Semanales
+        total_ingresos_semana = 0
+        total_horas_semana = 0
+        
+        # Agrupar horas por empleado para el resultado final
+        employee_stats = {} 
+        
         for item in asistencia_response.data:
-            fecha = item['fecha']
             tipo = item['tipo']
             valor = float(item['valor'])
             
-            if fecha not in daily_summary:
-                daily_summary[fecha] = {'total_ninos_monto': 0, 'total_empleados_horas': 0}
-            
             if tipo == 'nino':
-                daily_summary[fecha]['total_ninos_monto'] += valor
+                total_ingresos_semana += valor
             elif tipo == 'trabajadora':
-                daily_summary[fecha]['total_empleados_horas'] += valor
-        
-        # Calcular pago por hora teniendo en cuenta los gastos
-        daily_payment_per_hour = {}
-        for fecha, data in daily_summary.items():
-            pago_por_hora = 0
-            if data['total_empleados_horas'] > 0:
-                # Restar los gastos del día (si existen) del monto total
-                gastos_del_dia = daily_gastos.get(fecha, 0)
-                ingreso_neto = data['total_ninos_monto'] - gastos_del_dia
-                if ingreso_neto > 0:  # Solo si hay ganancia después de gastos
-                    pago_por_hora = ingreso_neto / data['total_empleados_horas']
-            daily_payment_per_hour[fecha] = pago_por_hora
-            print(f"DEBUG - Fecha: {fecha}, Monto: {data['total_ninos_monto']}, Gastos: {daily_gastos.get(fecha, 0)}, Horas: {data['total_empleados_horas']}, Pago/hora: {pago_por_hora}")
-
-        employee_earnings = {}
-        employee_ids_in_week = set()
-
-        for item in asistencia_response.data:
-            if item['tipo'] == 'trabajadora':
-                fecha = item['fecha']
+                total_horas_semana += valor
                 id_persona = item['id_persona']
-                horas_trabajadas = float(item['valor'])
                 
-                pago_por_hora_del_dia = daily_payment_per_hour.get(fecha, 0)
-                ganancia_diaria = horas_trabajadas * pago_por_hora_del_dia
+                # Inicializar empleada si no existe
+                if id_persona not in employee_stats:
+                    employee_stats[id_persona] = {
+                        'total_horas': 0, 
+                        'dias_trabajados': set()
+                    }
+                
+                employee_stats[id_persona]['total_horas'] += valor
+                employee_stats[id_persona]['dias_trabajados'].add(item['fecha'])
 
-                if id_persona not in employee_earnings:
-                    employee_earnings[id_persona] = {'total_ganancia': 0, 'total_horas': 0, 'dias_trabajados': set()}
+        total_gastos_semana = 0
+        if hasattr(gastos_response, 'data'):
+            for gasto in gastos_response.data:
+                total_gastos_semana += float(gasto.get('monto', 0))
                 
-                employee_earnings[id_persona]['total_ganancia'] += ganancia_diaria
-                employee_earnings[id_persona]['total_horas'] += horas_trabajadas
-                employee_earnings[id_persona]['dias_trabajados'].add(fecha)
-                employee_ids_in_week.add(id_persona)
+        # 4. Calcular Ingreso Neto y Pago por Hora Global
+        ingreso_neto_semana = total_ingresos_semana - total_gastos_semana
+        pago_por_hora_semanal = 0
         
+        if total_horas_semana > 0 and ingreso_neto_semana > 0:
+            pago_por_hora_semanal = ingreso_neto_semana / total_horas_semana
+            
+        print(f"DEBUG: Ingresos: {total_ingresos_semana}, Gastos: {total_gastos_semana}, Neto: {ingreso_neto_semana}, Horas: {total_horas_semana}, Rate: {pago_por_hora_semanal}")
+
+        # 5. Formatear resultado final
+        employee_ids = list(employee_stats.keys())
         employee_names_map = {}
-        if employee_ids_in_week:
-            employees_data_response = supabase.from_('employees').select('id, nombre').in_('id', list(employee_ids_in_week)).execute()
+        
+        if employee_ids:
+            employees_data_response = supabase.from_('employees').select('id, nombre').in_('id', employee_ids).execute()
             if hasattr(employees_data_response, 'data'):
                 employee_names_map = {item['id']: item['nombre'] for item in employees_data_response.data}
         
         final_earnings = []
-        for id_persona, data in employee_earnings.items():
-            nombre = employee_names_map.get(id_persona, 'Nombre no encontrado')
+        for id_persona, stats in employee_stats.items():
+            nombre = employee_names_map.get(id_persona, 'Desconocido')
+            ganancia_total = stats['total_horas'] * pago_por_hora_semanal
+            
             final_earnings.append({
                 'nombre': nombre,
-                'total_horas': data['total_horas'],
-                'total_ganancia': data['total_ganancia'],
-                'dias_trabajados': len(data['dias_trabajados'])
+                'total_horas': stats['total_horas'],
+                'total_ganancia': ganancia_total,
+                'dias_trabajados': len(stats['dias_trabajados'])
             })
 
         final_earnings.sort(key=lambda x: x['total_ganancia'], reverse=True)
-        
-        print(f"DEBUG: Ganancias finales de empleados para el frontend: {final_earnings}")
         return final_earnings
 
     except Exception as e:
