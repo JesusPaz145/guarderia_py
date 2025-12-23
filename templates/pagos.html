@@ -4,6 +4,46 @@
 
 {% block header_title %}Gestión de Pagos{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Estilos para la tabla responsive */
+    @media screen and (max-width: 768px) {
+        .responsive-table thead {
+            display: none;
+        }
+        .responsive-table tbody, .responsive-table tr, .responsive-table td {
+            display: block;
+            width: 100%;
+        }
+        .responsive-table tr {
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+        .responsive-table td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            border: none;
+            border-bottom: 1px solid #eee;
+        }
+        .responsive-table td:last-child {
+            border-bottom: none;
+        }
+        .responsive-table td::before {
+            content: attr(data-label);
+            font-weight: bold;
+            margin-right: 1rem;
+        }
+        .responsive-table td input, .responsive-table td select {
+            width: 60%;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
     <!-- Card: Pagos Pendientes -->
@@ -13,7 +53,7 @@
                 <i class="fas fa-file-invoice-dollar mr-3"></i>
                 Pagos pendientes
             </h2>
-            <button onclick="showAddPagoModal()" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md">
+            <button onclick="abrirModalRegistrarPago()" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md">
                 <i class="fas fa-plus mr-2"></i>
                 Registrar Pago
             </button>
@@ -59,6 +99,9 @@
                 <i class="fas fa-history mr-3"></i>
                 Últimos Pagos
             </h2>
+            <button onclick="abrirModalAjuste()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                Ajustar Pagos
+            </button>
         </div>
         
         {% if recent_pagos %}
@@ -95,129 +138,407 @@
     </div>
 </div>
 
-<!-- Modal para agregar pago -->
-<div id="addPagoModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-300">
-        <div class="text-center">
-            <h2 class="text-2xl font-bold text-pink-700 mb-6">Registrar Pago</h2>
+<!-- Modal para Registrar Pago -->
+<div id="registrarPagoModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Registrar Pago</h3>
+            <div id="registrar-pago-step-1">
+                <h4 class="text-md font-semibold mb-2">Paso 1: Seleccionar Niños</h4>
+                <div id="ninos-con-deuda-list" class="max-h-64 overflow-y-auto border rounded-md p-2">
+                    <!-- La lista de niños con deuda se cargará aquí -->
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="goToRegistrarPagoStep2()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Siguiente</button>
+                </div>
+            </div>
+            <div id="registrar-pago-step-2" class="hidden">
+                <h4 class="text-md font-semibold mb-2">Paso 2: Detalles del Pago</h4>
+                <div id="selected-ninos-pago-list" class="mb-4"></div>
+                <div class="mt-6 flex justify-between">
+                    <button onclick="goToRegistrarPagoStep1()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Anterior</button>
+                    <button onclick="confirmarRegistroPago()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Pago</button>
+                </div>
+            </div>
         </div>
-        <form id="addPagoForm">
-            <div class="space-y-4 text-left">
-                
-                <div>
-                    <label for="pagoNino" class="block text-sm font-medium text-gray-700 mb-2">Niño que paga:</label>
-                    <select id="pagoNino" name="id_nino" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500">
-                        <option value="">Seleccione un niño</option>
-                        {% for nino in ninos_activos %}
-                            <option value="{{ nino.id }}">{{ nino.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label for="pagoEmpleado" class="block text-sm font-medium text-gray-700 mb-2">Empleada que recibe:</label>
-                    <select id="pagoEmpleado" name="id_empleado" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500">
-                        <option value="">Seleccione una empleada</option>
-                        {% for emp in employees_activos %}
-                            <option value="{{ emp.id }}">{{ emp.nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div>
-                    <label for="pagoTipo" class="block text-sm font-medium text-gray-700 mb-2">Tipo de Pago:</label>
-                    <select id="pagoTipo" name="tipo" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500">
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Zelle">Zelle</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label for="pagoFecha" class="block text-sm font-medium text-gray-700 mb-2">Fecha:</label>
-                    <input type="date" id="pagoFecha" name="fecha" value="{{ get_current_time().date().isoformat() }}" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500">
-                </div>
-                
-                <div>
-                    <label for="pagoMonto" class="block text-sm font-medium text-gray-700 mb-2">Monto:</label>
-                    <input type="number" id="pagoMonto" name="monto" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500" placeholder="0.00">
-                </div>
-            </div>
-            
-            <div class="flex space-x-4 mt-6">
-                <button type="submit" class="flex-1 bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300">
-                    Guardar Pago
-                </button>
-                <button type="button" onclick="closeAddPagoModal()" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-all duration-300">
-                    Cancelar
-                </button>
-            </div>
-        </form>
     </div>
 </div>
+
+
+<!-- Modal para Ajustar Pagos -->
+<div id="ajusteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 id="ajusteModalTitle" class="text-lg leading-6 font-medium text-gray-900 mb-4">Ajustar Pagos</h3>
+            <div id="ajuste-step-1">
+                <h4 class="text-md font-semibold mb-2">Paso 1: Seleccionar Niños</h4>
+                <div id="ninos-list" class="max-h-64 overflow-y-auto border rounded-md p-2">
+                    <!-- La lista de niños se cargará aquí -->
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="goToAjusteStep2()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Siguiente</button>
+                </div>
+            </div>
+            <div id="ajuste-step-2" class="hidden">
+                <h4 class="text-md font-semibold mb-2">Paso 2: Confirmar Ajuste</h4>
+                <p>Niños seleccionados:</p>
+                <ul id="selected-ninos-list" class="list-disc list-inside mb-4">
+                    <!-- Niños seleccionados se mostrarán aquí -->
+                </ul>
+                <div>
+                    <label for="ajuste-fecha" class="block text-sm font-medium text-gray-700">Fecha de Ajuste</label>
+                    <input type="date" name="ajuste-fecha" id="ajuste-fecha" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500">
+                </div>
+                <div class="mt-6 flex justify-between">
+                    <button onclick="goToAjusteStep1()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Anterior</button>
+                    <button onclick="confirmarAjuste()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Ajuste</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    const addPagoModal = document.getElementById('addPagoModal');
-    const addPagoForm = document.getElementById('addPagoForm');
+const registrarPagoModal = document.getElementById('registrarPagoModal');
+const registrarPagoStep1 = document.getElementById('registrar-pago-step-1');
+const registrarPagoStep2 = document.getElementById('registrar-pago-step-2');
+const ninosConDeudaList = document.getElementById('ninos-con-deuda-list');
+const selectedNinosPagoList = document.getElementById('selected-ninos-pago-list');
 
-    function showAddPagoModal() {
-        addPagoModal.classList.remove('hidden');
-        addPagoModal.classList.add('flex');
+let empleadosCache = [];
+
+async function loadEmpleados() {
+    if (empleadosCache.length > 0) {
+        return empleadosCache;
+    }
+    try {
+        const response = await fetch('/api/employees-activos');
+        empleadosCache = await response.json();
+        return empleadosCache;
+    } catch (error) {
+        console.error('Error al cargar la lista de empleados:', error);
+        return [];
+    }
+}
+
+function abrirModalRegistrarPago() {
+    registrarPagoModal.classList.remove('hidden');
+    goToRegistrarPagoStep1();
+    loadNinosConDeuda();
+    loadEmpleados(); // Pre-cargar empleados
+}
+
+function cerrarModalRegistrarPago() {
+    registrarPagoModal.classList.add('hidden');
+}
+
+function goToRegistrarPagoStep1() {
+    registrarPagoStep1.classList.remove('hidden');
+    registrarPagoStep2.classList.add('hidden');
+}
+
+async function goToRegistrarPagoStep2() {
+    const selectedNinos = Array.from(ninosConDeudaList.querySelectorAll('input[type="checkbox"]:checked'));
+    if (selectedNinos.length === 0) {
+        alert('Debe seleccionar al menos un niño.');
+        return;
     }
 
-    function closeAddPagoModal() {
-        addPagoModal.classList.add('hidden');
-        addPagoModal.classList.remove('flex');
-        addPagoForm.reset();
+    const selectedNinosContainer = document.getElementById('selected-ninos-pago-list');
+    selectedNinosContainer.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.classList.add('min-w-full', 'bg-white', 'shadow-md', 'rounded-lg', 'mb-4', 'responsive-table');
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr class="bg-gray-100">
+            <th class="px-4 py-2 text-left">Niño</th>
+            <th class="px-4 py-2 text-left">Monto</th>
+            <th class="px-4 py-2 text-left">Paga a</th>
+            <th class="px-4 py-2 text-left">Tipo</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const empleados = await loadEmpleados();
+
+    selectedNinos.forEach(checkbox => {
+        const tr = document.createElement('tr');
+        tr.dataset.ninoId = checkbox.value;
+
+        // Nombre del niño
+        const nombreTd = document.createElement('td');
+        nombreTd.dataset.label = 'Niño';
+        nombreTd.textContent = checkbox.dataset.nombre;
+        tr.appendChild(nombreTd);
+
+        // Monto a pagar
+        const montoTd = document.createElement('td');
+        montoTd.dataset.label = 'Monto';
+        const montoInput = document.createElement('input');
+        montoInput.type = 'number';
+        montoInput.step = '0.01';
+        montoInput.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
+        montoInput.value = parseFloat(checkbox.dataset.deuda).toFixed(2);
+        montoInput.dataset.field = 'monto';
+        montoTd.appendChild(montoInput);
+        tr.appendChild(montoTd);
+
+        // Empleada que recibe
+        const empleadoTd = document.createElement('td');
+        empleadoTd.dataset.label = 'Paga a';
+        const empleadoSelect = document.createElement('select');
+        empleadoSelect.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
+        empleadoSelect.dataset.field = 'id_empleado';
+        empleados.forEach(empleado => {
+            const option = document.createElement('option');
+            option.value = empleado.id;
+            option.textContent = empleado.nombre;
+            if (empleado.id === 1) { // Anais ID
+                option.selected = true;
+            }
+            empleadoSelect.appendChild(option);
+        });
+        empleadoTd.appendChild(empleadoSelect);
+        tr.appendChild(empleadoTd);
+
+        // Tipo de pago
+        const tipoTd = document.createElement('td');
+        tipoTd.dataset.label = 'Tipo';
+        const tipoSelect = document.createElement('select');
+        tipoSelect.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
+        tipoSelect.dataset.field = 'tipo';
+        const tipos = ['Efectivo', 'Zelle'];
+        tipos.forEach(tipo => {
+            const option = document.createElement('option');
+            option.value = tipo;
+            option.textContent = tipo;
+            tipoSelect.appendChild(option);
+        });
+        tipoTd.appendChild(tipoSelect);
+        tr.appendChild(tipoTd);
+
+        tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    selectedNinosContainer.appendChild(table);
+
+    registrarPagoStep1.classList.add('hidden');
+    registrarPagoStep2.classList.remove('hidden');
+}
+
+async function loadNinosConDeuda() {
+    try {
+        const response = await fetch('/api/ninos/con_deuda');
+        const ninos = await response.json();
+        ninosConDeudaList.innerHTML = '';
+        ninos.forEach(nino => {
+            const div = document.createElement('div');
+            div.classList.add('flex', 'items-center');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `nino-deuda-${nino.id_nino}`;
+            checkbox.value = nino.id_nino;
+            checkbox.dataset.nombre = nino.nombre;
+            checkbox.dataset.deuda = nino.saldo_pendiente;
+            checkbox.classList.add('mr-2');
+            const label = document.createElement('label');
+            label.htmlFor = `nino-deuda-${nino.id_nino}`;
+            label.textContent = `${nino.nombre} (Deuda: ${nino.saldo_pendiente.toFixed(2)})`;
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            ninosConDeudaList.appendChild(div);
+        });
+    } catch (error) {
+        console.error('Error al cargar la lista de niños con deuda:', error);
+        ninosConDeudaList.innerHTML = '<p>Error al cargar la lista de niños con deuda.</p>';
     }
+}
 
-    addPagoModal.addEventListener('click', (e) => {
-        if (e.target === addPagoModal) {
-            closeAddPagoModal();
-        }
-    });
+async function confirmarRegistroPago() {
+    const pagos = [];
+    const rows = document.querySelectorAll('#selected-ninos-pago-list table tbody tr');
+    const fecha = new Date().toISOString().slice(0, 10); // Fecha actual
 
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !addPagoModal.classList.contains('hidden')) {
-            closeAddPagoModal();
-        }
-    });
+    let error = false;
+    rows.forEach(row => {
+        if (error) return;
 
-    addPagoForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(addPagoForm);
-        
-        const data = {
-            id_nino: parseInt(formData.get('id_nino')),
-            id_empleado: parseInt(formData.get('id_empleado')),
-            fecha: formData.get('fecha'),
-            monto: parseFloat(formData.get('monto')),
-            tipo: formData.get('tipo')
-        };
+        const ninoId = row.dataset.ninoId;
+        const monto = row.querySelector('input[data-field="monto"]').value;
+        const id_empleado = row.querySelector('select[data-field="id_empleado"]').value;
+        const tipo = row.querySelector('select[data-field="tipo"]').value;
 
-        if (!data.id_nino || !data.id_empleado || !data.fecha || isNaN(data.monto) || !data.tipo) {
-            alert('Por favor, complete todos los campos correctamente.');
+        if (!monto || !id_empleado || !tipo) {
+            alert('Por favor, complete todos los campos para cada niño.');
+            error = true;
             return;
         }
 
-        try {
-            const response = await fetch('/api/pagos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await response.json();
-            if (result.success) {
-                alert('Pago registrado exitosamente.');
-                window.location.reload();
-            } else {
-                alert('Error al registrar el pago: ' + result.error);
-            }
-        } catch (error) {
-            console.error('Error al registrar pago:', error);
-            alert('Ocurrió un error al registrar el pago.');
-        }
+        pagos.push({ 
+            id_nino: ninoId, 
+            monto: monto,
+            id_empleado: id_empleado,
+            fecha: fecha,
+            tipo: tipo
+        });
     });
+
+    if (error || pagos.length === 0) {
+        if (!error) alert('No hay pagos para registrar.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/pagos/registrar_pago_multiple', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ pagos: pagos })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Pagos registrados con éxito.');
+            location.reload();
+        } else {
+            alert('Error al registrar los pagos: ' + (result.error || 'Error desconocido'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al registrar los pagos.');
+    }
+}
+
+
+const ajusteModal = document.getElementById('ajusteModal');
+const ajusteStep1 = document.getElementById('ajuste-step-1');
+const ajusteStep2 = document.getElementById('ajuste-step-2');
+const ninosList = document.getElementById('ninos-list');
+const selectedNinosList = document.getElementById('selected-ninos-list');
+const ajusteFecha = document.getElementById('ajuste-fecha');
+
+function abrirModalAjuste() {
+    ajusteModal.classList.remove('hidden');
+    goToAjusteStep1();
+    loadNinos();
+}
+
+function cerrarModalAjuste() {
+    ajusteModal.classList.add('hidden');
+}
+
+function goToAjusteStep1() {
+    ajusteStep1.classList.remove('hidden');
+    ajusteStep2.classList.add('hidden');
+}
+
+function goToAjusteStep2() {
+    const selectedNinos = Array.from(ninosList.querySelectorAll('input[type="checkbox"]:checked'));
+    if (selectedNinos.length === 0) {
+        alert('Debe seleccionar al menos un niño.');
+        return;
+    }
+
+    selectedNinosList.innerHTML = '';
+    selectedNinos.forEach(checkbox => {
+        const li = document.createElement('li');
+        li.textContent = checkbox.dataset.nombre;
+        selectedNinosList.appendChild(li);
+    });
+
+    ajusteStep1.classList.add('hidden');
+    ajusteStep2.classList.remove('hidden');
+
+    // Set default date to previous Saturday
+    const today = new Date();
+    const prevSaturday = new Date(today.setDate(today.getDate() - (today.getDay() + 1) % 7));
+    ajusteFecha.valueAsDate = prevSaturday;
+}
+
+async function loadNinos() {
+    try {
+        const response = await fetch('/api/ninos');
+        const ninos = await response.json();
+        ninosList.innerHTML = '';
+        ninos.forEach(nino => {
+            const div = document.createElement('div');
+            div.classList.add('flex', 'items-center');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `nino-${nino.id}`;
+            checkbox.value = nino.id;
+            checkbox.dataset.nombre = nino.nombre;
+            checkbox.classList.add('mr-2');
+            const label = document.createElement('label');
+            label.htmlFor = `nino-${nino.id}`;
+            label.textContent = nino.nombre;
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            ninosList.appendChild(div);
+        });
+    } catch (error) {
+        console.error('Error al cargar la lista de niños:', error);
+        ninosList.innerHTML = '<p>Error al cargar la lista de niños.</p>';
+    }
+}
+
+async function confirmarAjuste() {
+    const selectedNinos = Array.from(ninosList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    const fecha = ajusteFecha.value;
+
+    if (selectedNinos.length === 0) {
+        alert('No hay niños seleccionados.');
+        return;
+    }
+
+    if (!fecha) {
+        alert('Debe seleccionar una fecha.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/gastos/ajustar_pagos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ninos_ids: selectedNinos,
+                fecha: fecha
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Ajuste de pagos realizado con éxito.');
+            location.reload();
+        } else {
+            alert('Error al realizar el ajuste de pagos: ' + (result.error || 'Error desconocido'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al realizar el ajuste de pagos.');
+    }
+}
+
+ajusteModal.addEventListener('click', function(e) {
+    if (e.target === ajusteModal) {
+        cerrarModalAjuste();
+    }
+});
+
+registrarPagoModal.addEventListener('click', function(e) {
+    if (e.target === registrarPagoModal) {
+        cerrarModalRegistrarPago();
+    }
+});
 </script>
 {% endblock %}

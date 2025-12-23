@@ -48,6 +48,17 @@ def verify_employee_credentials(usuario, contrasena):
         print(f"Error al verificar credenciales: {e}")
         return None
 
+def get_nino(id):
+    """Obtener un solo niño por su ID."""
+    try:
+        response = supabase.from_('ninos').select('*').eq('id', id).execute()
+        if hasattr(response, 'data') and response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Error al obtener niño: {e}")
+        return None
+
 def get_ninos():
     """Obtener todos los niños de la base de datos"""
     try:
@@ -939,8 +950,8 @@ def get_pending_payments():
             pagado = total_pagos.get(nino_id, 0)
             saldo = deuda - pagado
             
-            # Solo mostrar niños con deuda o que han asistido/pagado algo
-            if deuda > 0 or pagado > 0:
+            # Solo mostrar niños con deuda
+            if saldo > 0:
                 pending_payments.append({
                     'id_nino': nino_id,
                     'nombre': nino['nombre'],
@@ -956,6 +967,16 @@ def get_pending_payments():
 
     except Exception as e:
         print(f"Error al obtener pagos pendientes: {e}")
+        return []
+
+def get_ninos_con_deuda():
+    """Obtener todos los niños con deuda."""
+    try:
+        pending_payments = get_pending_payments()
+        ninos_con_deuda = [p for p in pending_payments if p['saldo_pendiente'] > 0]
+        return ninos_con_deuda
+    except Exception as e:
+        print(f"Error al obtener niños con deuda: {e}")
         return []
 
 def get_week_gastos(start_date, end_date):
@@ -989,7 +1010,6 @@ def get_week_gastos(start_date, end_date):
         print(f"Error al obtener gastos de la semana: {e}")
         return 0
             
-
 
         return [], 0
     except Exception as e:
