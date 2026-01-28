@@ -969,6 +969,66 @@ def get_pending_payments():
         print(f"Error al obtener pagos pendientes: {e}")
         return []
 
+def calculate_debt_snapshot(target_date):
+    """Calcula la deuda de cada niño HASTA una fecha específica."""
+    try:
+        # Convertir fecha a string si es necesario 
+        # (Supabase espera ISO format para comparaciones de fecha)
+        if hasattr(target_date, 'isoformat'):
+            target_date_str = target_date.isoformat()
+        else:
+            target_date_str = target_date
+
+        # 1. Obtener niños activos
+        ninos_response = supabase.from_('ninos').select('id, nombre, status').eq('status', 1).execute()
+        if not (hasattr(ninos_response, 'data') and ninos_response.data):
+            return []
+        
+        ninos = ninos_response.data
+        nino_ids = [nino['id'] for nino in ninos]
+
+        # 2. Total asistencia HASTA la fecha (inclusive)
+        asistencia_response = supabase.from_('asistencia').select('id_persona, valor')\
+            .eq('tipo', 'nino')\
+            .in_('id_persona', nino_ids)\
+            .lte('fecha', target_date_str)\
+            .execute()
+        
+        total_asistencia = {}
+        if hasattr(asistencia_response, 'data'):
+            for record in asistencia_response.data:
+                nino_id = record['id_persona']
+                total_asistencia[nino_id] = total_asistencia.get(nino_id, 0) + float(record['valor'])
+
+        # 3. Total pagos HASTA la fecha (inclusive)
+        pagos_response = supabase.from_('pagos').select('id_nino, monto')\
+            .in_('id_nino', nino_ids)\
+            .lte('date', target_date_str)\
+            .execute()
+        
+        total_pagos = {}
+        if hasattr(pagos_response, 'data'):
+            for record in pagos_response.data:
+                nino_id = record['id_nino']
+                total_pagos[nino_id] = total_pagos.get(nino_id, 0) + float(record['monto'])
+
+        # 4. Calcular saldos
+        snapshot_debts = {}
+        for nino in ninos:
+            nino_id = nino['id']
+            deuda = total_asistencia.get(nino_id, 0)
+            pagado = total_pagos.get(nino_id, 0)
+            saldo = deuda - pagado
+            
+            # Guardamos el saldo (positivo = deuda, negativo = saldo a favor)
+            snapshot_debts[str(nino_id)] = saldo
+            
+        return snapshot_debts
+
+    except Exception as e:
+        print(f"Error al calcular snapshot de deuda: {e}")
+        return {}
+
 def get_ninos_con_deuda():
     """Obtener todos los niños con deuda."""
     try:
@@ -1054,3 +1114,72 @@ def delete_gasto(id):
     except Exception as e:
         print(f"Error al eliminar gasto: {e}")
         return False
+
+def get_grouped_pagos(limit=20):
+    """Obtener el historial de pagos agrupado por fecha y empleada."""
+    try:
+        # Primero obtenemos los pagos recientes
+        # Podemos agrupar en Python para más flexibilidad
+        query = '*, ninos(nombre), employees(nombre)'
+        response = supabase.from_('pagos').select(query).order('date', desc=True).limit(200).execute()
+        
+        if not (hasattr(response, 'data') and response.data):
+            return []
+
+        grouped = {}
+        for item in response.data:
+            fecha = item.get('date')
+            empleada_dict = item.get('employees')
+            empleada_id = item.get('id_empleado')
+            empleada_nombre = 'Caja/Casa' if empleada_id == 9 else (empleada_dict.get('nombre', 'Desconocida') if empleada_dict else 'Desconocida')
+            
+            # Key única por fecha y empleada
+            key = (fecha, empleada_id)
+            
+            if key not in grouped:
+                grouped[key] = {
+                    'fecha': fecha,
+                    'id_empleada': empleada_id,
+                    'nombre_empleada': empleada_nombre,
+                    'total': 0,
+                    'cantidad_pagos': 0
+                }
+            
+            grouped[key]['total'] += float(item.get('monto', 0))
+            grouped[key]['cantidad_pagos'] += 1
+
+        # Convertir a lista y ordenar por fecha descendente
+        result = sorted(grouped.values(), key=lambda x: x['fecha'], reverse=True)
+        return result[:limit]
+
+    except Exception as e:
+        print(f"Error en get_grouped_pagos: {e}")
+        return []
+
+def get_pagos_group_details(fecha, id_empleada):
+    """Obtener los detalles de un grupo de pagos (mismos niños, montos, etc)."""
+    try:
+        query = '*, ninos(nombre)'
+        q = supabase.from_('pagos').select(query).eq('date', fecha)
+        
+        if id_empleada is None or id_empleada == 'None':
+             q = q.is_('id_empleado', 'null')
+        else:
+             q = q.eq('id_empleado', id_empleada)
+             
+        response = q.execute()
+        
+        if hasattr(response, 'data'):
+            details = []
+            for item in response.data:
+                nino_dict = item.get('ninos')
+                details.append({
+                    'nombre_nino': nino_dict.get('nombre', 'Desconocido') if nino_dict else 'Desconocido',
+                    'monto': float(item.get('monto', 0)),
+                    'tipo': item.get('tipo', 'Efectivo')
+                })
+            return details
+        return []
+    except Exception as e:
+        print(f"Error al obtener detalles del grupo de pagos: {e}")
+        return []

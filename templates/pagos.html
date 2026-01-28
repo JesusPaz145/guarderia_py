@@ -1,544 +1,473 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Pagos - Guardería{% endblock %}
+{% block content %}
+<div class="container mx-auto px-4 py-6 max-w-full">
+    <!-- Header simple -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Control de Pagos</h1>
+        <button onclick="abrirModalAjuste()" class="text-gray-500 hover:text-gray-800 text-sm font-semibold">
+            <i class="fas fa-cog"></i> Ajustes
+        </button>
+    </div>
 
-{% block header_title %}Gestión de Pagos{% endblock %}
+    <!-- Layout 60/40 -->
+    <div class="flex flex-col lg:flex-row gap-6">
 
-{% block extra_css %}
+        <!-- IZQUIERDA (60%): PAGOS PENDIENTES (CARDS) -->
+        <div class="lg:w-3/5 space-y-4">
+            <div
+                class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                <div class="relative flex-1">
+                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="filtroNino" onkeyup="filtrarNinos()" placeholder="Buscar niño para cobrar..."
+                        class="pl-10 pr-4 py-2 w-full border border-gray-100 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none bg-gray-50">
+                </div>
+                <button onclick="seleccionarTodosToggle()" id="btnSeleccionarTodos"
+                    class="text-sm font-bold text-pink-600 hover:text-pink-700 whitespace-nowrap px-4">
+                    Seleccionar Todos
+                </button>
+            </div>
+
+            <div id="ninosGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 pb-24 lg:pb-0">
+                {% if not pending_payments %}
+                <div class="col-span-full py-20 text-center">
+                    <div class="text-gray-300 text-5xl mb-4"><i class="fas fa-check-circle"></i></div>
+                    <p class="text-gray-400 font-medium">No hay pagos pendientes. ¡Todo al día!</p>
+                </div>
+                {% endif %}
+
+                {% for item in pending_payments %}
+                <div onclick="toggleNinoSelection(this, '{{ item.id_nino }}', '{{ item.nombre }}', {{ item.saldo_pendiente }})"
+                    data-nombre="{{ item.nombre }}"
+                    class="nino-card border-2 border-transparent rounded-3xl p-5 cursor-pointer hover:shadow-md transition-all text-center relative bg-white shadow-sm ring-1 ring-gray-100">
+                    <div
+                        class="w-14 h-14 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-3 font-black text-xl shadow-inner">
+                        {{ item.nombre[0]|upper }}
+                    </div>
+                    <h4 class="font-bold text-gray-800 text-sm truncate">{{ item.nombre }}</h4>
+                    <p class="text-pink-600 font-black text-sm mt-1">${{ "%.2f"|format(item.saldo_pendiente) }}</p>
+
+                    <!-- Indicador de selección -->
+                    <div
+                        class="check-mark absolute top-3 right-3 opacity-0 transform scale-50 transition-all text-pink-600">
+                        <i class="fas fa-check-circle text-xl"></i>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- DERECHA (40%): HISTORIAL AGRUPADO -->
+        <div class="lg:w-2/5">
+            <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden sticky top-6">
+                <div class="px-6 py-4 bg-gray-50/50 border-b border-gray-100">
+                    <h2 class="text-sm font-black text-gray-400 uppercase tracking-widest">Últimos Pagos</h2>
+                </div>
+                <div class="max-h-[calc(100vh-200px)] overflow-y-auto">
+                    <table class="min-w-full">
+                        <tbody class="divide-y divide-gray-50">
+                            {% for group in recent_pagos %}
+                            <tr onclick="verDetallesGrupo('{{ group.fecha }}', '{{ group.id_empleada }}', '{{ group.nombre_empleada }}', '{{ group.total }}')"
+                                class="hover:bg-pink-50/50 cursor-pointer transition-colors group">
+                                <td class="px-6 py-4">
+                                    <div class="text-xs font-bold text-gray-400">{{ group.fecha }}</div>
+                                    <div class="text-sm font-bold text-gray-700">{{ group.nombre_empleada }}</div>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <div class="text-sm font-black text-pink-600">${{ "%.2f"|format(group.total) }}
+                                    </div>
+                                    <div class="text-[10px] text-gray-400">{{ group.cantidad_pagos }} pagos</div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BOTÓN FLOTANTE (Solo cuando hay selección) -->
+<div id="floatingBtnContainer" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 hidden">
+    <button onclick="abrirModalConfirmacion()"
+        class="bg-pink-600 hover:bg-pink-700 text-white font-black py-4 px-10 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 flex items-center gap-4 animate-bounce-subtle">
+        <span class="bg-white/20 px-3 py-1 rounded-full text-sm" id="countBadge">0</span>
+        <span>REGISTRAR PAGO</span>
+        <span id="totalBadge" class="bg-pink-800/40 px-4 py-1 rounded-full text-lg">$0.00</span>
+    </button>
+</div>
+
+<!-- Modal: Confirmación de Pago (Ya con selección hecha) -->
+<div id="modalConfirmar"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+        <div class="p-8 pb-4">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="text-2xl font-black text-gray-800">Finalizar Pago</h3>
+                    <p class="text-gray-400 text-sm">Completa los datos de la recaudación</p>
+                </div>
+                <button onclick="cerrarModalConfirmar()" class="text-gray-300 hover:text-gray-500 transition-colors">
+                    <i class="fas fa-times-circle text-2xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Resumen -->
+                <div class="bg-gray-50 rounded-3xl p-6 border border-gray-100">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Monto Total</p>
+                    <p id="modalTotal" class="text-4xl font-black text-pink-600">$0.00</p>
+                </div>
+
+                <!-- Controles -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">¿Quién
+                            cobró?</label>
+                        <select id="selectEmpleado"
+                            class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
+                            {% for emp in employees_activos %}
+                            <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                            {% endfor %}
+                            <option value="9">Caja / Casa</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label
+                                class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Método</label>
+                            <select id="selectMetodo"
+                                class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
+                                <option value="Efectivo">Efectivo 💵</option>
+                                <option value="Zelle">Zelle 📱</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Fecha</label>
+                            <input type="date" id="selectFecha" value="{{ get_current_time().strftime('%Y-%m-%d') }}"
+                                class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-8">
+            <button onclick="finalizarRegistro()"
+                class="w-full bg-pink-600 hover:bg-pink-700 text-white font-black py-5 rounded-3xl shadow-lg transition-all transform active:scale-95 shadow-pink-200">
+                CONFIRMAR Y GUARDAR
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Detalles del Grupo -->
+<div id="modalDetalles"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 text-center">
+    <div
+        class="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden inline-block text-left align-middle transition-all transform">
+        <div class="p-8 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
+            <div>
+                <h3 class="text-xl font-bold text-gray-800">Recaudación</h3>
+                <p id="detallesSub" class="text-xs text-gray-400 font-bold uppercase"></p>
+            </div>
+            <button onclick="cerrarModalDetalles()" class="text-gray-300 hover:text-gray-500">
+                <i class="fas fa-times-circle text-2xl"></i>
+            </button>
+        </div>
+        <div class="p-8">
+            <ul id="listaDetalles" class="space-y-3 max-h-80 overflow-y-auto pr-2">
+                <!-- Se inyecta por JS -->
+            </ul>
+            <div class="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center">
+                <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Grupo</span>
+                <span id="detallesTotal" class="text-3xl font-black text-gray-800"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Ajuste de Saldos -->
+<div id="modalAjuste" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-[40px] shadow-xl w-full max-w-lg p-8">
+        <h3 class="text-2xl font-black text-gray-800 mb-2">Ajuste de Saldos</h3>
+        <p class="text-sm text-gray-400 mb-6 font-medium">Borra la deuda de los niños seleccionados HASTA la fecha
+            indicada.</p>
+
+        <div class="max-h-60 overflow-y-auto border-2 border-gray-50 rounded-3xl mb-6 p-4 space-y-2 bg-gray-50/30">
+            {% for item in pending_payments %}
+            <label
+                class="flex items-center p-3 hover:bg-white hover:shadow-sm rounded-2xl cursor-pointer transition-all border border-transparent hover:border-gray-100">
+                <input type="checkbox" name="ajuste_nino" value="{{ item.id_nino }}"
+                    class="form-checkbox text-pink-600 h-5 w-5 mr-4 rounded-lg">
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold text-gray-700">{{ item.nombre }}</span>
+                    <span class="text-[10px] font-black text-pink-400 uppercase">${{ item.saldo_pendiente }}</span>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <input type="date" id="fechaAjuste" value="{{ get_current_time().strftime('%Y-%m-%d') }}"
+            class="w-full p-4 bg-gray-50 border-0 rounded-2xl mb-6 font-bold text-gray-700 focus:ring-2 focus:ring-pink-500 focus:outline-none">
+
+        <div class="flex gap-4">
+            <button onclick="cerrarModalAjuste()"
+                class="flex-1 py-4 font-black text-gray-400 hover:text-gray-600 transition-colors">CANCELAR</button>
+            <button onclick="procesarAjuste()"
+                class="flex-1 bg-gray-800 text-white py-4 rounded-2xl font-black shadow-lg shadow-gray-200 hover:bg-black transition-all">CORRER
+                AJUSTE</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Éxito (Confirmación Visual) -->
+<div id="modalExito"
+    class="fixed inset-0 bg-black/60 backdrop-blur-md hidden z-[100] flex items-center justify-center p-4">
+    <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-sm overflow-hidden p-10 text-center animate-bounce-in">
+        <div class="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i class="fas fa-check text-4xl"></i>
+        </div>
+        <h3 class="text-3xl font-black text-gray-800 mb-2">¡Éxito!</h3>
+        <p class="text-gray-400 font-medium mb-8">El pago ha sido registrado correctamente y los saldos actualizados.
+        </p>
+        <button onclick="location.reload()"
+            class="w-full bg-gray-800 hover:bg-black text-white font-black py-4 rounded-2xl shadow-lg transition-all transform active:scale-95">
+            ENTENDIDO
+        </button>
+    </div>
+</div>
+
+<script>
+    let seleccionados = [];
+
+    function toggleNinoSelection(element, id, nombre, monto) {
+        const index = seleccionados.findIndex(s => s.id === id);
+        if (index > -1) {
+            seleccionados.splice(index, 1);
+            element.classList.remove('ring-4', 'ring-pink-500', 'border-pink-500', 'bg-pink-50', 'scale-95');
+            element.querySelector('.check-mark').classList.add('opacity-0');
+            element.querySelector('.check-mark').classList.add('scale-50');
+        } else {
+            seleccionados.push({ id, nombre, monto });
+            element.classList.add('ring-4', 'ring-pink-500', 'border-pink-500', 'bg-pink-50', 'scale-95');
+            element.querySelector('.check-mark').classList.remove('opacity-0');
+            element.querySelector('.check-mark').classList.remove('scale-50');
+        }
+
+        actualizarVistaBotones();
+    }
+
+    function actualizarVistaBotones() {
+        const container = document.getElementById('floatingBtnContainer');
+        const total = seleccionados.reduce((sum, s) => sum + s.monto, 0);
+
+        if (seleccionados.length > 0) {
+            container.classList.remove('hidden');
+            document.getElementById('countBadge').innerText = seleccionados.length;
+            document.getElementById('totalBadge').innerText = `$${total.toFixed(2)}`;
+        } else {
+            container.classList.add('hidden');
+        }
+    }
+
+    function abrirModalConfirmacion() {
+        const total = seleccionados.reduce((sum, s) => sum + s.monto, 0);
+        document.getElementById('modalTotal').innerText = `$${total.toFixed(2)}`;
+        document.getElementById('modalConfirmar').classList.remove('hidden');
+    }
+
+    function cerrarModalConfirmar() {
+        document.getElementById('modalConfirmar').classList.add('hidden');
+    }
+
+    function finalizarRegistro() {
+        const id_empleado = document.getElementById('selectEmpleado').value;
+        const metodo = document.getElementById('selectMetodo').value;
+        const fecha = document.getElementById('selectFecha').value;
+        const ninos_ids = seleccionados.map(s => s.id);
+
+        fetch('/api/pagos/registrar_multiple', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ninos_ids: ninos_ids,
+                id_empleado: id_empleado,
+                fecha: fecha,
+                tipo: metodo
+            })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                document.getElementById('modalConfirmar').classList.add('hidden');
+                document.getElementById('modalExito').classList.remove('hidden');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function filtrarNinos() {
+        const input = document.getElementById('filtroNino').value.toLowerCase();
+        document.querySelectorAll('.nino-card').forEach(card => {
+            const nombre = card.getAttribute('data-nombre').toLowerCase();
+            card.style.display = nombre.includes(input) ? '' : 'none';
+        });
+    }
+
+    function seleccionarTodosToggle() {
+        const cards = document.querySelectorAll('.nino-card:not([style*="display: none"])');
+        // Si la cantidad de seleccionados es igual a la cantidad de visibles, deseleccionamos todos
+        // de lo contrario, seleccionamos los que falten de los visibles.
+        const visiblesIds = Array.from(cards).map(c => c.getAttribute('onclick').match(/'([^']+)'/)[1]);
+        const todosVisiblesSeleccionados = visiblesIds.every(id => seleccionados.some(s => s.id === id));
+
+        if (todosVisiblesSeleccionados) {
+            // Deseleccionar los visibles
+            cards.forEach(c => {
+                const id = c.getAttribute('onclick').match(/'([^']+)'/)[1];
+                if (seleccionados.some(s => s.id === id)) c.click();
+            });
+        } else {
+            // Seleccionar los visibles que no están seleccionados
+            cards.forEach(c => {
+                const id = c.getAttribute('onclick').match(/'([^']+)'/)[1];
+                if (!seleccionados.some(s => s.id === id)) c.click();
+            });
+        }
+    }
+
+    async function verDetallesGrupo(fecha, id_emp, nombre_emp, total) {
+        document.getElementById('detallesSub').innerText = `${fecha} • ${nombre_emp}`;
+        document.getElementById('detallesTotal').innerText = `$${parseFloat(total).toFixed(2)}`;
+        document.getElementById('listaDetalles').innerHTML = '<li class="text-center text-gray-300 py-8"><i class="fas fa-circle-notch fa-spin text-2xl"></i></li>';
+        document.getElementById('modalDetalles').classList.remove('hidden');
+
+        try {
+            const res = await fetch(`/api/pagos/detalles?fecha=${fecha}&id_empleada=${id_emp}`);
+            const data = await res.json();
+
+            let html = '';
+            data.forEach(p => {
+                const icon = p.tipo === 'Zelle' ? '📱' : '💵';
+                html += `
+                <li class="flex justify-between items-center p-4 bg-gray-50 rounded-2-xl border border-gray-100/50">
+                    <div class="flex flex-col">
+                        <span class="font-bold text-gray-800 text-sm">${p.nombre_nino}</span>
+                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">${p.tipo} ${icon}</span>
+                    </div>
+                    <span class="font-black text-gray-700">$${p.monto.toFixed(2)}</span>
+                </li>`;
+            });
+            document.getElementById('listaDetalles').innerHTML = html || '<li class="text-center text-gray-400">Sin datos</li>';
+        } catch (e) {
+            document.getElementById('listaDetalles').innerHTML = '<li class="text-red-400 text-center font-bold">Error de conexión</li>';
+        }
+    }
+
+    function cerrarModalDetalles() { document.getElementById('modalDetalles').classList.add('hidden'); }
+    function abrirModalAjuste() { document.getElementById('modalAjuste').classList.remove('hidden'); }
+    function cerrarModalAjuste() { document.getElementById('modalAjuste').classList.add('hidden'); }
+
+    function procesarAjuste() {
+        const ninos_ids = Array.from(document.querySelectorAll('input[name="ajuste_nino"]:checked')).map(cb => cb.value);
+        const fecha = document.getElementById('fechaAjuste').value;
+        if (ninos_ids.length === 0) { alert('Selecciona algún niño'); return; }
+
+        fetch('/api/gastos/ajustar_pagos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ninos_ids, fecha })
+        }).then(res => res.json()).then(data => {
+            if (data.success) { alert('Ajuste exitoso'); location.reload(); }
+            else { alert('Error: ' + data.error); }
+        });
+    }
+</script>
+
 <style>
-    /* Estilos para la tabla responsive */
-    @media screen and (max-width: 768px) {
-        .responsive-table thead {
-            display: none;
+    @keyframes bounce-subtle {
+
+        0%,
+        100% {
+            transform: translate(-50%, 0);
         }
-        .responsive-table tbody, .responsive-table tr, .responsive-table td {
-            display: block;
-            width: 100%;
+
+        50% {
+            transform: translate(-50%, -5px);
         }
-        .responsive-table tr {
-            margin-bottom: 1rem;
-            border: 1px solid #ddd;
-            border-radius: 0.5rem;
-            padding: 0.5rem;
+    }
+
+    .animate-bounce-subtle {
+        animation: bounce-subtle 3s infinite ease-in-out;
+    }
+
+    @keyframes slide-up {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
         }
-        .responsive-table td {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem;
-            border: none;
-            border-bottom: 1px solid #eee;
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
         }
-        .responsive-table td:last-child {
-            border-bottom: none;
+    }
+
+    .animate-slide-up {
+        animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes bounce-in {
+        0% {
+            transform: scale(0.5);
+            opacity: 0;
         }
-        .responsive-table td::before {
-            content: attr(data-label);
-            font-weight: bold;
-            margin-right: 1rem;
+
+        70% {
+            transform: scale(1.05);
+            opacity: 1;
         }
-        .responsive-table td input, .responsive-table td select {
-            width: 60%;
+
+        100% {
+            transform: scale(1);
         }
+    }
+
+    .animate-bounce-in {
+        animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .nino-card {
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .nino-card:hover {
+        transform: translateY(-3px);
+    }
+
+    .nino-card:active {
+        transform: scale(0.95);
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #fee2e2;
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #fecaca;
     }
 </style>
-{% endblock %}
-
-{% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <!-- Card: Pagos Pendientes -->
-    <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-red-100">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-semibold text-red-700">
-                <i class="fas fa-file-invoice-dollar mr-3"></i>
-                Pagos pendientes
-            </h2>
-            <button onclick="abrirModalRegistrarPago()" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-md">
-                <i class="fas fa-plus mr-2"></i>
-                Registrar Pago
-            </button>
-        </div>
-        
-        {% if pending_payments %}
-            <div class="overflow-y-auto max-h-[60vh]">
-                <table class="w-full text-left">
-                    <thead class="bg-red-50 border-b border-red-200 sticky top-0">
-                        <tr>
-                            <th class="px-4 py-3 font-semibold text-red-700">Niño</th>
-                            <th class="px-4 py-3 font-semibold text-red-700 text-right">Deuda Total</th>
-                            <th class="px-4 py-3 font-semibold text-red-700 text-right">Total Pagado</th>
-                            <th class="px-4 py-3 font-semibold text-red-700 text-right">Saldo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pago in pending_payments %}
-                        <tr class="border-b border-red-100 hover:bg-red-50 transition-colors duration-200">
-                            <td class="px-4 py-4 font-medium text-red-800">{{ pago.nombre }}</td>
-                            <td class="px-4 py-4 text-red-700 text-right">$ {{ "%.2f"|format(pago.total_deuda) }}</td>
-                            <td class="px-4 py-4 text-green-700 text-right">$ {{ "%.2f"|format(pago.total_pagado) }}</td>
-                            <td class="px-4 py-4 font-bold text-right {% if pago.saldo_pendiente > 0 %}text-red-600{% elif pago.saldo_pendiente < 0 %}text-green-600{% else %}text-gray-600{% endif %}">
-                                $ {{ "%.2f"|format(pago.saldo_pendiente) }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="text-center py-8">
-                <i class="fas fa-check-circle text-green-400 text-4xl mb-4"></i>
-                <p class="text-gray-500 text-lg">No hay pagos pendientes.</p>
-            </div>
-        {% endif %}
-    </div>
-
-    <!-- Card: Últimos Pagos Registrados -->
-    <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-blue-100">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-semibold text-blue-700">
-                <i class="fas fa-history mr-3"></i>
-                Últimos Pagos
-            </h2>
-            <button onclick="abrirModalAjuste()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
-                Ajustar Pagos
-            </button>
-        </div>
-        
-        {% if recent_pagos %}
-            <div class="overflow-y-auto max-h-[60vh]">
-                <table class="w-full text-left">
-                    <thead class="bg-blue-50 border-b border-blue-200 sticky top-0">
-                        <tr>
-                            <th class="px-4 py-3 font-semibold text-blue-700">Fecha</th>
-                            <th class="px-4 py-3 font-semibold text-blue-700">Niño</th>
-                            <th class="px-4 py-3 font-semibold text-blue-700">Empleada</th>
-                            <th class="px-4 py-3 font-semibold text-blue-700">Tipo</th>
-                            <th class="px-4 py-3 font-semibold text-blue-700 text-right">Monto</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pago in recent_pagos %}
-                        <tr class="border-b border-blue-100 hover:bg-blue-50 transition-colors duration-200">
-                            <td class="px-4 py-4 text-blue-800">{{ pago.date }}</td>
-                            <td class="px-4 py-4 font-medium text-blue-800">{{ pago.nombre_nino }}</td>
-                            <td class="px-4 py-4 font-medium text-blue-800">{{ pago.nombre_empleada }}</td>
-                            <td class="px-4 py-4 text-blue-800">{{ pago.tipo }}</td>
-                            <td class="px-4 py-4 text-blue-700 text-right">$ {{ "%.2f"|format(pago.monto) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="text-center py-8">
-                <i class="fas fa-receipt text-blue-300 text-4xl mb-4"></i>
-                <p class="text-blue-500 text-lg">No se han registrado pagos recientemente.</p>
-            </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Modal para Registrar Pago -->
-<div id="registrarPagoModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
-    <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Registrar Pago</h3>
-            <div id="registrar-pago-step-1">
-                <h4 class="text-md font-semibold mb-2">Paso 1: Seleccionar Niños</h4>
-                <div id="ninos-con-deuda-list" class="max-h-64 overflow-y-auto border rounded-md p-2">
-                    <!-- La lista de niños con deuda se cargará aquí -->
-                </div>
-                <div class="mt-4 flex justify-end">
-                    <button onclick="goToRegistrarPagoStep2()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Siguiente</button>
-                </div>
-            </div>
-            <div id="registrar-pago-step-2" class="hidden">
-                <h4 class="text-md font-semibold mb-2">Paso 2: Detalles del Pago</h4>
-                <div id="selected-ninos-pago-list" class="mb-4"></div>
-                <div class="mt-6 flex justify-between">
-                    <button onclick="goToRegistrarPagoStep1()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Anterior</button>
-                    <button onclick="confirmarRegistroPago()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Pago</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- Modal para Ajustar Pagos -->
-<div id="ajusteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
-    <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-            <h3 id="ajusteModalTitle" class="text-lg leading-6 font-medium text-gray-900 mb-4">Ajustar Pagos</h3>
-            <div id="ajuste-step-1">
-                <h4 class="text-md font-semibold mb-2">Paso 1: Seleccionar Niños</h4>
-                <div id="ninos-list" class="max-h-64 overflow-y-auto border rounded-md p-2">
-                    <!-- La lista de niños se cargará aquí -->
-                </div>
-                <div class="mt-4 flex justify-end">
-                    <button onclick="goToAjusteStep2()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Siguiente</button>
-                </div>
-            </div>
-            <div id="ajuste-step-2" class="hidden">
-                <h4 class="text-md font-semibold mb-2">Paso 2: Confirmar Ajuste</h4>
-                <p>Niños seleccionados:</p>
-                <ul id="selected-ninos-list" class="list-disc list-inside mb-4">
-                    <!-- Niños seleccionados se mostrarán aquí -->
-                </ul>
-                <div>
-                    <label for="ajuste-fecha" class="block text-sm font-medium text-gray-700">Fecha de Ajuste</label>
-                    <input type="date" name="ajuste-fecha" id="ajuste-fecha" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500">
-                </div>
-                <div class="mt-6 flex justify-between">
-                    <button onclick="goToAjusteStep1()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">Anterior</button>
-                    <button onclick="confirmarAjuste()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Confirmar Ajuste</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% endblock %}
-
-{% block extra_js %}
-<script>
-const registrarPagoModal = document.getElementById('registrarPagoModal');
-const registrarPagoStep1 = document.getElementById('registrar-pago-step-1');
-const registrarPagoStep2 = document.getElementById('registrar-pago-step-2');
-const ninosConDeudaList = document.getElementById('ninos-con-deuda-list');
-const selectedNinosPagoList = document.getElementById('selected-ninos-pago-list');
-
-let empleadosCache = [];
-
-async function loadEmpleados() {
-    if (empleadosCache.length > 0) {
-        return empleadosCache;
-    }
-    try {
-        const response = await fetch('/api/employees-activos');
-        empleadosCache = await response.json();
-        return empleadosCache;
-    } catch (error) {
-        console.error('Error al cargar la lista de empleados:', error);
-        return [];
-    }
-}
-
-function abrirModalRegistrarPago() {
-    registrarPagoModal.classList.remove('hidden');
-    goToRegistrarPagoStep1();
-    loadNinosConDeuda();
-    loadEmpleados(); // Pre-cargar empleados
-}
-
-function cerrarModalRegistrarPago() {
-    registrarPagoModal.classList.add('hidden');
-}
-
-function goToRegistrarPagoStep1() {
-    registrarPagoStep1.classList.remove('hidden');
-    registrarPagoStep2.classList.add('hidden');
-}
-
-async function goToRegistrarPagoStep2() {
-    const selectedNinos = Array.from(ninosConDeudaList.querySelectorAll('input[type="checkbox"]:checked'));
-    if (selectedNinos.length === 0) {
-        alert('Debe seleccionar al menos un niño.');
-        return;
-    }
-
-    const selectedNinosContainer = document.getElementById('selected-ninos-pago-list');
-    selectedNinosContainer.innerHTML = '';
-
-    const table = document.createElement('table');
-    table.classList.add('min-w-full', 'bg-white', 'shadow-md', 'rounded-lg', 'mb-4', 'responsive-table');
-
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-        <tr class="bg-gray-100">
-            <th class="px-4 py-2 text-left">Niño</th>
-            <th class="px-4 py-2 text-left">Monto</th>
-            <th class="px-4 py-2 text-left">Paga a</th>
-            <th class="px-4 py-2 text-left">Tipo</th>
-        </tr>
-    `;
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    const empleados = await loadEmpleados();
-
-    selectedNinos.forEach(checkbox => {
-        const tr = document.createElement('tr');
-        tr.dataset.ninoId = checkbox.value;
-
-        // Nombre del niño
-        const nombreTd = document.createElement('td');
-        nombreTd.dataset.label = 'Niño';
-        nombreTd.textContent = checkbox.dataset.nombre;
-        tr.appendChild(nombreTd);
-
-        // Monto a pagar
-        const montoTd = document.createElement('td');
-        montoTd.dataset.label = 'Monto';
-        const montoInput = document.createElement('input');
-        montoInput.type = 'number';
-        montoInput.step = '0.01';
-        montoInput.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
-        montoInput.value = parseFloat(checkbox.dataset.deuda).toFixed(2);
-        montoInput.dataset.field = 'monto';
-        montoTd.appendChild(montoInput);
-        tr.appendChild(montoTd);
-
-        // Empleada que recibe
-        const empleadoTd = document.createElement('td');
-        empleadoTd.dataset.label = 'Paga a';
-        const empleadoSelect = document.createElement('select');
-        empleadoSelect.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
-        empleadoSelect.dataset.field = 'id_empleado';
-        empleados.forEach(empleado => {
-            const option = document.createElement('option');
-            option.value = empleado.id;
-            option.textContent = empleado.nombre;
-            if (empleado.id === 1) { // Anais ID
-                option.selected = true;
-            }
-            empleadoSelect.appendChild(option);
-        });
-        empleadoTd.appendChild(empleadoSelect);
-        tr.appendChild(empleadoTd);
-
-        // Tipo de pago
-        const tipoTd = document.createElement('td');
-        tipoTd.dataset.label = 'Tipo';
-        const tipoSelect = document.createElement('select');
-        tipoSelect.classList.add('w-full', 'px-2', 'py-1', 'border', 'rounded');
-        tipoSelect.dataset.field = 'tipo';
-        const tipos = ['Efectivo', 'Zelle'];
-        tipos.forEach(tipo => {
-            const option = document.createElement('option');
-            option.value = tipo;
-            option.textContent = tipo;
-            tipoSelect.appendChild(option);
-        });
-        tipoTd.appendChild(tipoSelect);
-        tr.appendChild(tipoTd);
-
-        tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    selectedNinosContainer.appendChild(table);
-
-    registrarPagoStep1.classList.add('hidden');
-    registrarPagoStep2.classList.remove('hidden');
-}
-
-async function loadNinosConDeuda() {
-    try {
-        const response = await fetch('/api/ninos/con_deuda');
-        const ninos = await response.json();
-        ninosConDeudaList.innerHTML = '';
-        ninos.forEach(nino => {
-            const div = document.createElement('div');
-            div.classList.add('flex', 'items-center');
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `nino-deuda-${nino.id_nino}`;
-            checkbox.value = nino.id_nino;
-            checkbox.dataset.nombre = nino.nombre;
-            checkbox.dataset.deuda = nino.saldo_pendiente;
-            checkbox.classList.add('mr-2');
-            const label = document.createElement('label');
-            label.htmlFor = `nino-deuda-${nino.id_nino}`;
-            label.textContent = `${nino.nombre} (Deuda: ${nino.saldo_pendiente.toFixed(2)})`;
-            div.appendChild(checkbox);
-            div.appendChild(label);
-            ninosConDeudaList.appendChild(div);
-        });
-    } catch (error) {
-        console.error('Error al cargar la lista de niños con deuda:', error);
-        ninosConDeudaList.innerHTML = '<p>Error al cargar la lista de niños con deuda.</p>';
-    }
-}
-
-async function confirmarRegistroPago() {
-    const pagos = [];
-    const rows = document.querySelectorAll('#selected-ninos-pago-list table tbody tr');
-    const fecha = new Date().toISOString().slice(0, 10); // Fecha actual
-
-    let error = false;
-    rows.forEach(row => {
-        if (error) return;
-
-        const ninoId = row.dataset.ninoId;
-        const monto = row.querySelector('input[data-field="monto"]').value;
-        const id_empleado = row.querySelector('select[data-field="id_empleado"]').value;
-        const tipo = row.querySelector('select[data-field="tipo"]').value;
-
-        if (!monto || !id_empleado || !tipo) {
-            alert('Por favor, complete todos los campos para cada niño.');
-            error = true;
-            return;
-        }
-
-        pagos.push({ 
-            id_nino: ninoId, 
-            monto: monto,
-            id_empleado: id_empleado,
-            fecha: fecha,
-            tipo: tipo
-        });
-    });
-
-    if (error || pagos.length === 0) {
-        if (!error) alert('No hay pagos para registrar.');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/pagos/registrar_pago_multiple', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ pagos: pagos })
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            alert('Pagos registrados con éxito.');
-            location.reload();
-        } else {
-            alert('Error al registrar los pagos: ' + (result.error || 'Error desconocido'));
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al registrar los pagos.');
-    }
-}
-
-
-const ajusteModal = document.getElementById('ajusteModal');
-const ajusteStep1 = document.getElementById('ajuste-step-1');
-const ajusteStep2 = document.getElementById('ajuste-step-2');
-const ninosList = document.getElementById('ninos-list');
-const selectedNinosList = document.getElementById('selected-ninos-list');
-const ajusteFecha = document.getElementById('ajuste-fecha');
-
-function abrirModalAjuste() {
-    ajusteModal.classList.remove('hidden');
-    goToAjusteStep1();
-    loadNinos();
-}
-
-function cerrarModalAjuste() {
-    ajusteModal.classList.add('hidden');
-}
-
-function goToAjusteStep1() {
-    ajusteStep1.classList.remove('hidden');
-    ajusteStep2.classList.add('hidden');
-}
-
-function goToAjusteStep2() {
-    const selectedNinos = Array.from(ninosList.querySelectorAll('input[type="checkbox"]:checked'));
-    if (selectedNinos.length === 0) {
-        alert('Debe seleccionar al menos un niño.');
-        return;
-    }
-
-    selectedNinosList.innerHTML = '';
-    selectedNinos.forEach(checkbox => {
-        const li = document.createElement('li');
-        li.textContent = checkbox.dataset.nombre;
-        selectedNinosList.appendChild(li);
-    });
-
-    ajusteStep1.classList.add('hidden');
-    ajusteStep2.classList.remove('hidden');
-
-    // Set default date to previous Saturday
-    const today = new Date();
-    const prevSaturday = new Date(today.setDate(today.getDate() - (today.getDay() + 1) % 7));
-    ajusteFecha.valueAsDate = prevSaturday;
-}
-
-async function loadNinos() {
-    try {
-        const response = await fetch('/api/ninos');
-        const ninos = await response.json();
-        ninosList.innerHTML = '';
-        ninos.forEach(nino => {
-            const div = document.createElement('div');
-            div.classList.add('flex', 'items-center');
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `nino-${nino.id}`;
-            checkbox.value = nino.id;
-            checkbox.dataset.nombre = nino.nombre;
-            checkbox.classList.add('mr-2');
-            const label = document.createElement('label');
-            label.htmlFor = `nino-${nino.id}`;
-            label.textContent = nino.nombre;
-            div.appendChild(checkbox);
-            div.appendChild(label);
-            ninosList.appendChild(div);
-        });
-    } catch (error) {
-        console.error('Error al cargar la lista de niños:', error);
-        ninosList.innerHTML = '<p>Error al cargar la lista de niños.</p>';
-    }
-}
-
-async function confirmarAjuste() {
-    const selectedNinos = Array.from(ninosList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-    const fecha = ajusteFecha.value;
-
-    if (selectedNinos.length === 0) {
-        alert('No hay niños seleccionados.');
-        return;
-    }
-
-    if (!fecha) {
-        alert('Debe seleccionar una fecha.');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/gastos/ajustar_pagos', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ninos_ids: selectedNinos,
-                fecha: fecha
-            })
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            alert('Ajuste de pagos realizado con éxito.');
-            location.reload();
-        } else {
-            alert('Error al realizar el ajuste de pagos: ' + (result.error || 'Error desconocido'));
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al realizar el ajuste de pagos.');
-    }
-}
-
-ajusteModal.addEventListener('click', function(e) {
-    if (e.target === ajusteModal) {
-        cerrarModalAjuste();
-    }
-});
-
-registrarPagoModal.addEventListener('click', function(e) {
-    if (e.target === registrarPagoModal) {
-        cerrarModalRegistrarPago();
-    }
-});
-</script>
 {% endblock %}

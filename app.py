@@ -10,9 +10,10 @@ from database import (
                       get_date_ninos_asistencia, get_date_employees_asistencia,
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
-                      get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
-                      get_week_gastos, add_gasto, update_gasto, delete_gasto,
-                      verify_employee_credentials, get_ninos_con_deuda)
+                       get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
+                       get_week_gastos, add_gasto, update_gasto, delete_gasto,
+                       verify_employee_credentials, get_ninos_con_deuda,
+                       get_grouped_pagos, get_pagos_group_details)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -431,20 +432,33 @@ def pagos():
     if 'user' not in session:
         return redirect(url_for('login'))
     
-    recent_pagos = get_recent_pagos(limit=15)
+    # Obtenemos el historial agrupado por defecto (últimos 20 grupos)
+    recent_pagos_grouped = get_grouped_pagos(limit=20)
     pending_payments = get_pending_payments()
     
-    # Para el modal de agregar pago, necesito la lista de niños y empleados activos
     ninos_activos = get_active_ninos()
     employees_activos = get_active_employees()
     
     return render_template('pagos.html', 
                            active_page='pagos',
-                           recent_pagos=recent_pagos,
+                           recent_pagos=recent_pagos_grouped,
                            pending_payments=pending_payments,
                            ninos_activos=ninos_activos,
                            employees_activos=employees_activos,
                            get_current_time=get_current_time)
+
+@app.route('/api/pagos/detalles')
+@admin_required
+def api_pagos_detalles():
+    fecha = request.args.get('fecha')
+    id_empleada = request.args.get('id_empleada')
+    
+    # Manejar el caso de 'null' si id_empleada no viene o es literal 'None'
+    if id_empleada == 'null' or id_empleada == 'None' or id_empleada == '':
+        id_empleada = None
+        
+    detalles = get_pagos_group_details(fecha, id_empleada)
+    return jsonify(detalles)
 
 @app.route('/api/pagos', methods=['POST'])
 def crear_pago():
@@ -499,16 +513,43 @@ def registrar_pago_multiple():
         if pagos_realizados < len(pagos):
             error_msg = f"Se procesaron {len(pagos)} pagos, pero solo {pagos_realizados} tuvieron éxito."
             print(f"Error en registrar_pago_multiple: {error_msg}")
-            # Decide if this should be a client error or server error
-            return jsonify({'error': error_msg, 'success': False}), 207 # Multi-Status
-
-        if pagos_realizados == 0 and len(pagos) > 0:
-            return jsonify({'error': 'Ninguno de los pagos pudo ser registrado.'}), 500
+            return jsonify({'error': error_msg, 'success': False}), 207
 
         return jsonify({'success': True})
 
     except Exception as e:
         print(f"Error al registrar pago múltiple: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/registrar_multiple', methods=['POST'])
+def registrar_multiple_v2():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        ninos_ids = data.get('ninos_ids', [])
+        id_empleado = data.get('id_empleado')
+        fecha = data.get('fecha')
+        tipo = data.get('tipo')
+        
+        if not ninos_ids or not id_empleado or not fecha or not tipo:
+            return jsonify({'error': 'Faltan datos requeridos (ninos_ids, id_empleado, fecha, tipo)'}), 400
+            
+        success_count = 0
+        from database import calculate_debt_snapshot
+        snapshot_debts = calculate_debt_snapshot(fecha)
+        
+        for nino_id in ninos_ids:
+            # Obtener el monto adeudado para este niño en esa fecha
+            monto = snapshot_debts.get(str(nino_id), 0)
+            if monto > 0:
+                result = add_pago(fecha, nino_id, int(id_empleado), monto, tipo)
+                if result:
+                    success_count += 1
+        
+        return jsonify({'success': True, 'count': success_count})
+    except Exception as e:
+        print(f"Error en registrar_multiple: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/asistencia', methods=['POST'])
@@ -647,14 +688,19 @@ def ajustar_pagos():
         data = request.json
         ninos_ids = data['ninos_ids']
         fecha = data['fecha']
-
-        pending_payments = get_pending_payments()
-        pending_payments_dict = {str(p['id_nino']): p['saldo_pendiente'] for p in pending_payments}
+        
+        # Usar la nueva función que calcula deuda HASTA la fecha específica
+        # Importante: Esto evita pagar deudas futuras si se hace un ajuste pasado
+        from database import calculate_debt_snapshot
+        snapshot_debts = calculate_debt_snapshot(fecha)
 
         for nino_id in ninos_ids:
-            monto_deuda = pending_payments_dict.get(nino_id, 0)
+            nino_id_str = str(nino_id)
+            monto_deuda = snapshot_debts.get(nino_id_str, 0)
+            
             if monto_deuda > 0:
-                add_pago(fecha, nino_id, None, monto_deuda, 'Ajuste')
+                # Usamos ID 9 (Caja/Casa) para los ajustes
+                add_pago(fecha, nino_id, 9, monto_deuda, 'Ajuste')
 
         return jsonify({'success': True})
     except Exception as e:
