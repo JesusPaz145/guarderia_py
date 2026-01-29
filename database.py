@@ -29,6 +29,21 @@ try:
 except Exception as e:
     print(f"Error al crear cliente de Supabase: {e}")
 
+def fetch_all_paginated(query_builder, page_size=1000):
+    """Auxiliar para obtener todos los registros de una consulta manejando el límite de 1000 de Supabase."""
+    all_data = []
+    start = 0
+    while True:
+        response = query_builder.range(start, start + page_size - 1).execute()
+        data = response.data
+        if not data:
+            break
+        all_data.extend(data)
+        if len(data) < page_size:
+            break
+        start += page_size
+    return all_data
+
 def verify_employee_credentials(usuario, contrasena):
     """Verificar credenciales del empleado y retornar sus datos si son válidos"""
     try:
@@ -406,8 +421,17 @@ def add_asistencia(fecha, tipo, id_persona, valor):
         
         response = supabase.table('asistencia').insert(data).execute()
         if response.data:
-            print(f"Asistencia agregada exitosamente: {response.data[0]}")
-            return response.data[0]
+            record = response.data[0]
+            # Si es niño, actualizar su saldo guardado
+            if tipo == 'nino':
+                child = supabase.table('ninos').select('saldo').eq('id', id_persona).execute()
+                if child.data:
+                    old_saldo = float(child.data[0].get('saldo') or 0)
+                    new_saldo = old_saldo + float(valor)
+                    supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_persona).execute()
+            
+            print(f"Asistencia agregada exitosamente: {record}")
+            return record
         return None
     except Exception as e:
         print(f"Error al agregar asistencia: {e}")
@@ -573,16 +597,30 @@ def get_today_employees_asistencia(): # ESTA ES LA FUNCIÓN QUE SE SUGIRIÓ EN E
 def update_asistencia(id, valor):
     """Actualizar el valor de un registro de asistencia"""
     try:
-        print(f"\n=== Actualizando asistencia {id} ===")
-        print(f"Nuevo valor: {valor}")
+        # 1. Obtener el registro antiguo para saber cuánto cambiar el saldo
+        old_response = supabase.table('asistencia').select('*').eq('id', id).execute()
+        if not (old_response.data and len(old_response.data) > 0):
+            return None
         
-        data = {
-            "valor": valor
-        }
-        
+        old_record = old_response.data[0]
+        old_valor = float(old_record.get('valor') or 0)
+        tipo = old_record.get('tipo')
+        id_persona = old_record.get('id_persona')
+
+        # 2. Actualizar el registro
+        data = {"valor": valor}
         response = supabase.from_('asistencia').update(data).eq('id', id).execute()
         
         if hasattr(response, 'data') and response.data:
+            # 3. Si es niño, ajustar el saldo (diferencia)
+            if tipo == 'nino':
+                child = supabase.table('ninos').select('saldo').eq('id', id_persona).execute()
+                if child.data:
+                    current_saldo = float(child.data[0].get('saldo') or 0)
+                    diferencia = float(valor) - old_valor
+                    new_saldo = current_saldo + diferencia
+                    supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_persona).execute()
+            
             print(f"Asistencia actualizada exitosamente: {response.data[0]}")
             return response.data[0]
         return None
@@ -593,9 +631,24 @@ def update_asistencia(id, valor):
 def delete_asistencia(id):
     """Eliminar un registro de asistencia"""
     try:
-        print(f"\n=== Eliminando asistencia {id} ===")
-        
-        response = supabase.from_('asistencia').delete().eq('id', id).execute()
+        # 1. Obtener datos antes de borrar para ajustar saldo
+        old_response = supabase.table('asistencia').select('*').eq('id', id).execute()
+        if old_response.data:
+            old_record = old_response.data[0]
+            tipo = old_record.get('tipo')
+            id_persona = old_record.get('id_persona')
+            valor = float(old_record.get('valor') or 0)
+
+            # 2. Borrar
+            supabase.from_('asistencia').delete().eq('id', id).execute()
+
+            # 3. Ajustar saldo si es niño
+            if tipo == 'nino':
+                child = supabase.table('ninos').select('saldo').eq('id', id_persona).execute()
+                if child.data:
+                    current_saldo = float(child.data[0].get('saldo') or 0)
+                    new_saldo = current_saldo - valor
+                    supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_persona).execute()
         
         print(f"Asistencia eliminada exitosamente")
         return True
@@ -756,9 +809,11 @@ def get_week_employees_earnings(start_of_week, end_of_week):
         end_date_str = end_of_week.isoformat()
 
         # 1. Obtener todas las asistencias de la semana
-        asistencia_response = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona').gte('fecha', start_date_str).lte('fecha', end_date_str).execute()
+        query = supabase.from_('asistencia').select('fecha, tipo, valor, id_persona')\
+            .gte('fecha', start_date_str).lte('fecha', end_date_str)
+        asistencia_data = fetch_all_paginated(query)
         
-        if not (hasattr(asistencia_response, 'data') and asistencia_response.data):
+        if not asistencia_data:
             return []
 
         # 2. Obtener todos los gastos de la semana
@@ -771,7 +826,7 @@ def get_week_employees_earnings(start_of_week, end_of_week):
         # Agrupar horas por empleado para el resultado final
         employee_stats = {} 
         
-        for item in asistencia_response.data:
+        for item in asistencia_data:
             tipo = item['tipo']
             valor = float(item['valor'])
             
@@ -845,7 +900,16 @@ def add_pago(fecha, id_nino, id_empleado, monto, tipo):
         }
         
         response = supabase.table('pagos').insert(data).execute()
-        return response.data[0] if response.data else None
+        if response.data:
+            # Actualizar saldo del niño (Restar el pago)
+            child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
+            if child.data:
+                old_saldo = float(child.data[0].get('saldo') or 0)
+                new_saldo = old_saldo - float(monto)
+                supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
+            
+            return response.data[0]
+        return None
     except Exception as e:
         print(f"Error al agregar pago: {e}")
         return None
@@ -914,55 +978,27 @@ def get_recent_pagos(limit=10):
 
 
 def get_pending_payments():
-    """Calcula los saldos pendientes de todos los niños."""
+    """Calcula los saldos pendientes de todos los niños USANDO EL CAMPO SALDO GUARDADO."""
     try:
-        # 1. Obtener todos los niños activos
-        ninos_response = supabase.from_('ninos').select('id, nombre, status').eq('status', 1).execute()
+        # 1. Obtener todos los niños activos con su saldo
+        ninos_response = supabase.from_('ninos').select('id, nombre, saldo, status').eq('status', 1).execute()
         if not (hasattr(ninos_response, 'data') and ninos_response.data):
             return []
         
-        ninos = ninos_response.data
-        nino_ids = [nino['id'] for nino in ninos]
-
-        # 2. Obtener el total de asistencia para todos los niños activos en una consulta
-        asistencia_response = supabase.from_('asistencia').select('id_persona, valor').eq('tipo', 'nino').in_('id_persona', nino_ids).execute()
-        
-        total_asistencia = {}
-        if hasattr(asistencia_response, 'data'):
-            for record in asistencia_response.data:
-                nino_id = record['id_persona']
-                total_asistencia[nino_id] = total_asistencia.get(nino_id, 0) + float(record['valor'])
-
-        # 3. Obtener el total de pagos para todos los niños activos en una consulta
-        pagos_response = supabase.from_('pagos').select('id_nino, monto').in_('id_nino', nino_ids).execute()
-        
-        total_pagos = {}
-        if hasattr(pagos_response, 'data'):
-            for record in pagos_response.data:
-                nino_id = record['id_nino']
-                total_pagos[nino_id] = total_pagos.get(nino_id, 0) + float(record['monto'])
-
-        # 4. Calcular saldos pendientes
         pending_payments = []
-        for nino in ninos:
-            nino_id = nino['id']
-            deuda = total_asistencia.get(nino_id, 0)
-            pagado = total_pagos.get(nino_id, 0)
-            saldo = deuda - pagado
+        for nino in ninos_response.data:
+            saldo = float(nino.get('saldo') or 0)
             
             # Solo mostrar niños con deuda
             if saldo > 0:
                 pending_payments.append({
-                    'id_nino': nino_id,
+                    'id_nino': nino['id'],
                     'nombre': nino['nombre'],
-                    'total_deuda': deuda,
-                    'total_pagado': pagado,
                     'saldo_pendiente': saldo
                 })
         
         # Ordenar por saldo pendiente (de mayor a menor deuda)
         pending_payments.sort(key=lambda x: x['saldo_pendiente'], reverse=True)
-        
         return pending_payments
 
     except Exception as e:
@@ -988,15 +1024,14 @@ def calculate_debt_snapshot(target_date):
         nino_ids = [nino['id'] for nino in ninos]
 
         # 2. Total asistencia HASTA la fecha (inclusive)
-        asistencia_response = supabase.from_('asistencia').select('id_persona, valor')\
+        query = supabase.from_('asistencia').select('id_persona, valor')\
             .eq('tipo', 'nino')\
             .in_('id_persona', nino_ids)\
-            .lte('fecha', target_date_str)\
-            .execute()
+            .lte('fecha', target_date_str)
+        asistencia_data = fetch_all_paginated(query)
         
         total_asistencia = {}
-        if hasattr(asistencia_response, 'data'):
-            for record in asistencia_response.data:
+        for record in asistencia_data:
                 nino_id = record['id_persona']
                 total_asistencia[nino_id] = total_asistencia.get(nino_id, 0) + float(record['valor'])
 
