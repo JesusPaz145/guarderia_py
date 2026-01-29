@@ -914,6 +914,35 @@ def add_pago(fecha, id_nino, id_empleado, monto, tipo):
         print(f"Error al agregar pago: {e}")
         return None
 
+def delete_pago(pago_id):
+    """Eliminar un pago y revertir el saldo del niño."""
+    try:
+        print(f"\n=== Revirtiendo Pago {pago_id} ===")
+        # 1. Obtener datos del pago antes de borrar
+        pago_resp = supabase.table('pagos').select('*').eq('id', pago_id).execute()
+        if not (pago_resp.data and len(pago_resp.data) > 0):
+            return False
+            
+        pago = pago_resp.data[0]
+        id_nino = pago['id_nino']
+        monto = float(pago['monto'])
+        
+        # 2. Eliminar el pago
+        supabase.table('pagos').delete().eq('id', pago_id).execute()
+        
+        # 3. Sumar el monto de vuelta al saldo del niño (porque el pago redujo la deuda, borrarlo la aumenta)
+        child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
+        if child.data:
+            current_saldo = float(child.data[0].get('saldo') or 0)
+            new_saldo = current_saldo + monto
+            supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
+            print(f"Pago revertido. Nuevo saldo del niño {id_nino}: {new_saldo}")
+            
+        return True
+    except Exception as e:
+        print(f"Error al revertir pago: {e}")
+        return False
+
 def get_recent_pagos(limit=10):
     """Obtener los pagos más recientes."""
     try:
@@ -1166,26 +1195,43 @@ def get_grouped_pagos(limit=20):
             fecha = item.get('date')
             empleada_dict = item.get('employees')
             empleada_id = item.get('id_empleado')
+            tipo = item.get('tipo', 'Efectivo')
+            nino_dict = item.get('ninos')
+            nino_nombre = nino_dict.get('nombre', 'Desconocido') if nino_dict else 'Desconocido'
+            pago_id = item.get('id')
+            
             empleada_nombre = 'Caja/Casa' if empleada_id == 9 else (empleada_dict.get('nombre', 'Desconocida') if empleada_dict else 'Desconocida')
             
-            # Key única por fecha y empleada
-            key = (fecha, empleada_id)
+            # Key única por fecha, empleada y tipo de pago
+            key = (fecha, empleada_id, tipo)
             
             if key not in grouped:
                 grouped[key] = {
                     'fecha': fecha,
                     'id_empleada': empleada_id,
                     'nombre_empleada': empleada_nombre,
+                    'tipo': tipo,
                     'total': 0,
-                    'cantidad_pagos': 0
+                    'cantidad_pagos': 0,
+                    'ninos_nombres_list': [],
+                    'pago_ids': []
                 }
             
             grouped[key]['total'] += float(item.get('monto', 0))
             grouped[key]['cantidad_pagos'] += 1
+            grouped[key]['pago_ids'].append(pago_id)
+            if nino_nombre not in grouped[key]['ninos_nombres_list']:
+                grouped[key]['ninos_nombres_list'].append(nino_nombre)
 
-        # Convertir a lista y ordenar por fecha descendente
-        result = sorted(grouped.values(), key=lambda x: x['fecha'], reverse=True)
-        return result[:limit]
+        # Convertir a lista y formatear strings
+        result_list = []
+        for key, val in grouped.items():
+            val['ninos_resumen'] = ", ".join(val['ninos_nombres_list'])
+            result_list.append(val)
+
+        # Ordenar por fecha descendente
+        result_list.sort(key=lambda x: x['fecha'], reverse=True)
+        return result_list[:limit]
 
     except Exception as e:
         print(f"Error en get_grouped_pagos: {e}")
@@ -1209,6 +1255,7 @@ def get_pagos_group_details(fecha, id_empleada):
             for item in response.data:
                 nino_dict = item.get('ninos')
                 details.append({
+                    'id': item.get('id'),
                     'nombre_nino': nino_dict.get('nombre', 'Desconocido') if nino_dict else 'Desconocido',
                     'monto': float(item.get('monto', 0)),
                     'tipo': item.get('tipo', 'Efectivo')

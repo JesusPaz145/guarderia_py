@@ -13,7 +13,7 @@ from database import (
                        get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
                        get_week_gastos, add_gasto, update_gasto, delete_gasto,
                        verify_employee_credentials, get_ninos_con_deuda,
-                       get_grouped_pagos, get_pagos_group_details)
+                       get_grouped_pagos, get_pagos_group_details, delete_pago)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -705,6 +705,40 @@ def ajustar_pagos():
         return jsonify({'success': True})
     except Exception as e:
         print(f"Error al ajustar pagos: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/revertir/<int:id>', methods=['POST'])
+@admin_required
+def revertir_pago_api(id):
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        if delete_pago(id):
+            return jsonify({'success': True})
+        return jsonify({'error': 'No se pudo revertir el pago'}), 500
+    except Exception as e:
+        print(f"Error en revertir_pago_api: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/revertir_grupo', methods=['POST'])
+@admin_required
+def revertir_grupo_api():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        pago_ids = data.get('pago_ids', [])
+        
+        success_count = 0
+        for pid in pago_ids:
+            if delete_pago(pid):
+                success_count += 1
+                
+        if success_count > 0:
+            return jsonify({'success': True, 'count': success_count})
+        return jsonify({'error': 'No se pudo revertir ningún pago'}), 500
+    except Exception as e:
+        print(f"Error en revertir_grupo_api: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['GET', 'POST'])
