@@ -68,9 +68,9 @@ def dashboard(date=None):
     else:
         current_date = get_current_time().date()
 
-    # Calcular inicio y fin de la semana (Lunes a Sábado)
+    # Calcular inicio y fin de la semana (Lunes a Domingo)
     start_of_week = current_date - timedelta(days=current_date.weekday())
-    end_of_week = start_of_week + timedelta(days=5)
+    end_of_week = start_of_week + timedelta(days=6)
 
     # Calcular semanas anterior y siguiente
     prev_week_start = start_of_week - timedelta(days=7)
@@ -128,9 +128,9 @@ def gastos(date=None):
     else:
         current_date = get_current_time().date()
 
-    # Calcular inicio y fin de la semana (Lunes a Sábado)
+    # Calcular inicio y fin de la semana (Lunes a Domingo)
     start_of_week = current_date - timedelta(days=current_date.weekday())
-    end_of_week = start_of_week + timedelta(days=5)
+    end_of_week = start_of_week + timedelta(days=6)
 
     # Calcular semanas anterior y siguiente
     prev_week_start = start_of_week - timedelta(days=7)
@@ -140,13 +140,9 @@ def gastos(date=None):
     week_start_str = start_of_week.strftime('%B %d')
     week_end_str = end_of_week.strftime('%B %d')
 
-    # Asegurarnos de que las fechas estén en UTC para Supabase
-    start_utc = datetime.combine(start_of_week, datetime.min.time()).astimezone(pytz.UTC)
-    end_utc = datetime.combine(end_of_week, datetime.max.time()).astimezone(pytz.UTC)
-    
-    # Obtener gastos de la semana
+    # Obtener gastos de la semana usando fechas simples para evitar desfases de zona horaria
     try:
-        gastos, total_gastos = get_week_gastos(start_utc, end_utc)
+        gastos, total_gastos = get_week_gastos(start_of_week, end_of_week)
         
         # Debug: Imprimir los gastos
         print("\n=== DEBUG: Datos de gastos ===")

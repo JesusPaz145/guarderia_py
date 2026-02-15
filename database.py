@@ -1129,13 +1129,6 @@ def get_week_gastos(start_date, end_date):
             return gastos_converted, total_gastos
             
         return [], 0
-        return 0
-    except Exception as e:
-        print(f"Error al obtener gastos de la semana: {e}")
-        return 0
-            
-
-        return [], 0
     except Exception as e:
         print(f"Error al obtener gastos de la semana: {e}")
         return [], 0
