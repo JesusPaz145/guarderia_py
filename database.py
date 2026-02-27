@@ -705,6 +705,59 @@ def get_week_ninos_total(start_date, end_date):
         return 0
 
 
+def get_week_children_summary(start_of_week, end_of_week):
+    """Obtener resumen semanal de niÃ±os con total y desglose por dÃ­a (Lunes a Viernes)."""
+    try:
+        start_date_str = start_of_week.isoformat()
+        end_date_str = end_of_week.isoformat()
+
+        response = supabase.from_('asistencia').select('fecha, valor, id_persona')\
+            .eq('tipo', 'nino').gte('fecha', start_date_str).lte('fecha', end_date_str).execute()
+
+        if not (hasattr(response, 'data') and response.data):
+            return []
+
+        week_days = []
+        for i in range(5):
+            date_obj = start_of_week + timedelta(days=i)
+            week_days.append({
+                'date': date_obj.isoformat(),
+                'label': ['Lunes', 'Martes', 'MiÃ©rcoles', 'Jueves', 'Viernes'][i]
+            })
+
+        nino_ids = list(set(item['id_persona'] for item in response.data))
+        nino_names_map = {}
+        if nino_ids:
+            ninos_response = supabase.from_('ninos').select('id, nombre').in_('id', nino_ids).execute()
+            if hasattr(ninos_response, 'data') and ninos_response.data:
+                nino_names_map = {item['id']: item['nombre'] for item in ninos_response.data}
+
+        children_summary = {}
+        for item in response.data:
+            nino_id = item['id_persona']
+            fecha = item['fecha']
+            valor = float(item.get('valor') or 0)
+
+            if nino_id not in children_summary:
+                children_summary[nino_id] = {
+                    'id': nino_id,
+                    'nombre': nino_names_map.get(nino_id, 'Desconocido'),
+                    'total': 0,
+                    'daily': [{'label': d['label'], 'date': d['date'], 'amount': 0} for d in week_days]
+                }
+
+            for daily_item in children_summary[nino_id]['daily']:
+                if daily_item['date'] == fecha:
+                    daily_item['amount'] += valor
+                    children_summary[nino_id]['total'] += valor
+                    break
+
+        result = sorted(children_summary.values(), key=lambda x: x['total'], reverse=True)
+        return result
+    except Exception as e:
+        print(f"Error al obtener resumen semanal de niÃ±os: {e}")
+        return []
+
 def get_week_daily_amounts(start_date, end_date):
     """Obtener los montos diarios para un rango de fechas específico.
     Esto incluye los nombres de niños y trabajadoras que asistieron cada día.

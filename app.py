@@ -13,7 +13,8 @@ from database import (
                        get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
                        get_week_gastos, add_gasto, update_gasto, delete_gasto,
                        verify_employee_credentials, get_ninos_con_deuda,
-                       get_grouped_pagos, get_pagos_group_details, delete_pago)
+                       get_grouped_pagos, get_pagos_group_details, delete_pago,
+                       get_week_children_summary)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -113,6 +114,39 @@ def dashboard(date=None):
                            active_employees_count=active_employees_count,
                            week_daily_amounts=week_daily_amounts,
                            week_employees_earnings=week_employees_earnings)
+
+@app.route('/resumen-semanal')
+@app.route('/resumen-semanal/<date>')
+def resumen_semanal(date=None):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    if date:
+        try:
+            current_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            current_date = get_current_time().date()
+    else:
+        current_date = get_current_time().date()
+
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    prev_week_start = start_of_week - timedelta(days=7)
+    next_week_start = start_of_week + timedelta(days=7)
+
+    children_weekly_summary = get_week_children_summary(start_of_week, end_of_week)
+    week_employees_earnings = get_week_employees_earnings(start_of_week, end_of_week)
+
+    return render_template(
+        'resumen_semanal.html',
+        active_page='resumen_semanal',
+        week_start_str=start_of_week.strftime('%Y-%m-%d'),
+        week_end_str=end_of_week.strftime('%Y-%m-%d'),
+        prev_week_start_str=prev_week_start.strftime('%Y-%m-%d'),
+        next_week_start_str=next_week_start.strftime('%Y-%m-%d'),
+        children_weekly_summary=children_weekly_summary,
+        week_employees_earnings=week_employees_earnings
+    )
 
 @app.route('/gastos')
 @app.route('/gastos/<date>')
