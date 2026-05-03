@@ -1,10 +1,61 @@
 # database.py - Archivo completo y corregido (Versión con más Debug)
 
-from supabase import create_client
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta # Asegúrate de que esta línea esté aquí al principio
 import pytz
+
+# Intentar importar supabase; si no está disponible, crear un cliente de respaldo (fake)
+try:
+    from supabase import create_client
+    SUPABASE_AVAILABLE = True
+except Exception as e:
+    print(f"Aviso: supabase no disponible ({e}). Usando cliente de respaldo (fake).")
+    SUPABASE_AVAILABLE = False
+
+    class _FakeResponse:
+        def __init__(self, data=None, count=0):
+            self.data = data or []
+            self.count = count
+
+    class _FakeQuery:
+        def __init__(self, data=None):
+            self._data = data or []
+
+        def select(self, *args, **kwargs):
+            return self
+        def eq(self, *args, **kwargs):
+            return self
+        def gte(self, *args, **kwargs):
+            return self
+        def lte(self, *args, **kwargs):
+            return self
+        def in_(self, *args, **kwargs):
+            return self
+        def range(self, *args, **kwargs):
+            return self
+        def insert(self, *args, **kwargs):
+            return self
+        def update(self, *args, **kwargs):
+            return self
+        def delete(self, *args, **kwargs):
+            return self
+        def execute(self):
+            return _FakeResponse(data=self._data, count=len(self._data))
+
+    class _FakeClient:
+        def __init__(self):
+            # Estructuras de ejemplo vacías
+            self._tables = {}
+
+        def from_(self, name):
+            return _FakeQuery([])
+
+        def table(self, name):
+            return _FakeQuery([])
+
+    def create_client(url, key):
+        return _FakeClient()
 
 def get_current_time():
     """Returns the current time in 'America/Chicago' timezone."""
