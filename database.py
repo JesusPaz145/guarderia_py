@@ -993,7 +993,7 @@ def get_week_employees_earnings(start_of_week, end_of_week):
         return []
 
 def add_pago(fecha, id_nino, id_empleado, monto, tipo):
-    """Agregar un nuevo pago a la base de datos."""
+    """Agregar un nuevo pago. Marca asistencias pendientes FIFO hasta cubrir el monto."""
     try:
         data = {
             "date": fecha,
@@ -1002,46 +1002,99 @@ def add_pago(fecha, id_nino, id_empleado, monto, tipo):
             "monto": float(monto),
             "tipo": tipo  # 'Efectivo' o 'Zelle'
         }
-        
+
         response = supabase.table('pagos').insert(data).execute()
-        if response.data:
-            # Actualizar saldo del niño (Restar el pago)
-            child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
-            if child.data:
-                old_saldo = float(child.data[0].get('saldo') or 0)
-                new_saldo = old_saldo - float(monto)
-                supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
-            
-            return response.data[0]
-        return None
+        if not response.data:
+            return None
+
+        pago = response.data[0]
+        pago_id = pago['id']
+
+        # Marcar asistencias pendientes del niño (más viejas primero) hasta consumir el monto
+        unpaid = supabase.from_('asistencia').select('id, valor') \
+            .eq('tipo', 'nino').eq('id_persona', id_nino).eq('pagado', False) \
+            .order('fecha', desc=False).order('id', desc=False).execute()
+
+        monto_restante = float(monto)
+        EPSILON = 0.001
+        for a in (unpaid.data or []):
+            valor = float(a.get('valor') or 0)
+            if valor <= 0:
+                continue
+            if monto_restante + EPSILON >= valor:
+                supabase.from_('asistencia').update({
+                    'pagado': True,
+                    'id_pago': pago_id
+                }).eq('id', a['id']).execute()
+                monto_restante -= valor
+            if monto_restante <= EPSILON:
+                break
+
+        # (Legado) Mantener ninos.saldo sincronizado hasta que se complete la migración
+        child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
+        if child.data:
+            old_saldo = float(child.data[0].get('saldo') or 0)
+            new_saldo = old_saldo - float(monto)
+            supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
+
+        return pago
     except Exception as e:
         print(f"Error al agregar pago: {e}")
         return None
 
 def delete_pago(pago_id):
-    """Eliminar un pago y revertir el saldo del niño."""
+    """Eliminar un pago y revertir las asistencias que cubrió (pagado=false)."""
     try:
         print(f"\n=== Revirtiendo Pago {pago_id} ===")
-        # 1. Obtener datos del pago antes de borrar
         pago_resp = supabase.table('pagos').select('*').eq('id', pago_id).execute()
         if not (pago_resp.data and len(pago_resp.data) > 0):
             return False
-            
+
         pago = pago_resp.data[0]
         id_nino = pago['id_nino']
         monto = float(pago['monto'])
-        
+
+        # 1a. Asistencias linkeadas a este pago (caso normal del código nuevo)
+        linked = supabase.from_('asistencia').select('id').eq('id_pago', pago_id).execute()
+        linked_ids = [a['id'] for a in (linked.data or [])]
+
+        if linked_ids:
+            supabase.from_('asistencia').update({
+                'pagado': False,
+                'id_pago': None
+            }).eq('id_pago', pago_id).execute()
+        else:
+            # 1b. Fallback para pagos legacy: marcar como pagado=false las asistencias
+            #     más recientes del niño (pagado=true, sin id_pago) hasta cubrir el monto.
+            paid = supabase.from_('asistencia').select('id, valor, fecha') \
+                .eq('tipo', 'nino').eq('id_persona', id_nino).eq('pagado', True) \
+                .is_('id_pago', 'null') \
+                .order('fecha', desc=True).order('id', desc=True).execute()
+
+            monto_restante = monto
+            EPSILON = 0.001
+            for a in (paid.data or []):
+                valor = float(a.get('valor') or 0)
+                if valor <= 0:
+                    continue
+                if monto_restante + EPSILON >= valor:
+                    supabase.from_('asistencia').update({'pagado': False}) \
+                        .eq('id', a['id']).execute()
+                    monto_restante -= valor
+                if monto_restante <= EPSILON:
+                    break
+
         # 2. Eliminar el pago
         supabase.table('pagos').delete().eq('id', pago_id).execute()
-        
-        # 3. Sumar el monto de vuelta al saldo del niño (porque el pago redujo la deuda, borrarlo la aumenta)
+
+        # 3. (Legado) Mantener ninos.saldo sincronizado
         child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
         if child.data:
             current_saldo = float(child.data[0].get('saldo') or 0)
             new_saldo = current_saldo + monto
             supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
             print(f"Pago revertido. Nuevo saldo del niño {id_nino}: {new_saldo}")
-            
+
         return True
     except Exception as e:
         print(f"Error al revertir pago: {e}")
@@ -1111,28 +1164,43 @@ def get_recent_pagos(limit=10):
 
 
 def get_pending_payments():
-    """Calcula los saldos pendientes de todos los niños USANDO EL CAMPO SALDO GUARDADO."""
+    """Saldo pendiente por niño = SUMA de asistencia.valor donde pagado=false."""
     try:
-        # 1. Obtener todos los niños activos con su saldo
-        ninos_response = supabase.from_('ninos').select('id, nombre, saldo, status').eq('status', 1).execute()
-        if not (hasattr(ninos_response, 'data') and ninos_response.data):
+        # 1. Asistencias no pagadas de niños
+        query = supabase.from_('asistencia').select('id_persona, valor') \
+            .eq('tipo', 'nino').eq('pagado', False)
+        asistencia_data = fetch_all_paginated(query)
+
+        if not asistencia_data:
             return []
-        
-        pending_payments = []
-        for nino in ninos_response.data:
-            saldo = float(nino.get('saldo') or 0)
-            
-            # Solo mostrar niños con deuda
-            if saldo > 0:
-                pending_payments.append({
-                    'id_nino': nino['id'],
-                    'nombre': nino['nombre'],
-                    'saldo_pendiente': saldo
+
+        # 2. Sumar por niño
+        deudas = {}
+        for r in asistencia_data:
+            nid = r['id_persona']
+            deudas[nid] = deudas.get(nid, 0) + float(r.get('valor') or 0)
+
+        nino_ids = [nid for nid, saldo in deudas.items() if saldo > 0]
+        if not nino_ids:
+            return []
+
+        # 3. Nombres de niños activos
+        ninos_resp = supabase.from_('ninos').select('id, nombre') \
+            .in_('id', nino_ids).eq('status', 1).execute()
+        nombres = {n['id']: n['nombre'] for n in (ninos_resp.data or [])}
+
+        # 4. Armar resultado (solo niños activos con deuda)
+        pending = []
+        for nid, saldo in deudas.items():
+            if nid in nombres and saldo > 0:
+                pending.append({
+                    'id_nino': nid,
+                    'nombre': nombres[nid],
+                    'saldo_pendiente': round(saldo, 2)
                 })
-        
-        # Ordenar por saldo pendiente (de mayor a menor deuda)
-        pending_payments.sort(key=lambda x: x['saldo_pendiente'], reverse=True)
-        return pending_payments
+
+        pending.sort(key=lambda x: x['saldo_pendiente'], reverse=True)
+        return pending
 
     except Exception as e:
         print(f"Error al obtener pagos pendientes: {e}")
