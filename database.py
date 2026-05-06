@@ -1164,23 +1164,36 @@ def get_recent_pagos(limit=10):
 
 
 def get_pending_payments():
-    """Saldo pendiente por niño = SUMA de asistencia.valor donde pagado=false."""
+    """Saldo pendiente por niño = SUMA de asistencia.valor donde pagado=false.
+    Cada item incluye 'solo_actual' = True si toda su deuda es de la semana en curso."""
     try:
-        # 1. Asistencias no pagadas de niños
-        query = supabase.from_('asistencia').select('id_persona, valor') \
+        # Lunes de la semana en curso (zona horaria del negocio)
+        today = get_current_time().date()
+        monday_current = today - timedelta(days=today.weekday())
+        monday_iso = monday_current.isoformat()
+
+        # 1. Asistencias no pagadas de niños (incluyendo fecha)
+        query = supabase.from_('asistencia').select('id_persona, valor, fecha') \
             .eq('tipo', 'nino').eq('pagado', False)
         asistencia_data = fetch_all_paginated(query)
 
         if not asistencia_data:
             return []
 
-        # 2. Sumar por niño
+        # 2. Sumar por niño separando deuda anterior vs. semana actual
         deudas = {}
         for r in asistencia_data:
             nid = r['id_persona']
-            deudas[nid] = deudas.get(nid, 0) + float(r.get('valor') or 0)
+            valor = float(r.get('valor') or 0)
+            fecha = r.get('fecha') or ''
+            if nid not in deudas:
+                deudas[nid] = {'anterior': 0.0, 'actual': 0.0}
+            if fecha < monday_iso:
+                deudas[nid]['anterior'] += valor
+            else:
+                deudas[nid]['actual'] += valor
 
-        nino_ids = [nid for nid, saldo in deudas.items() if saldo > 0]
+        nino_ids = [nid for nid, d in deudas.items() if (d['anterior'] + d['actual']) > 0]
         if not nino_ids:
             return []
 
@@ -1191,15 +1204,20 @@ def get_pending_payments():
 
         # 4. Armar resultado (solo niños activos con deuda)
         pending = []
-        for nid, saldo in deudas.items():
-            if nid in nombres and saldo > 0:
+        for nid, d in deudas.items():
+            total = d['anterior'] + d['actual']
+            if nid in nombres and total > 0:
                 pending.append({
                     'id_nino': nid,
                     'nombre': nombres[nid],
-                    'saldo_pendiente': round(saldo, 2)
+                    'saldo_pendiente': round(total, 2),
+                    'deuda_anterior': round(d['anterior'], 2),
+                    'deuda_actual': round(d['actual'], 2),
+                    'solo_actual': d['anterior'] == 0
                 })
 
-        pending.sort(key=lambda x: x['saldo_pendiente'], reverse=True)
+        # Ordenar primero por deuda anterior (los morosos arriba), luego por total
+        pending.sort(key=lambda x: (x['deuda_anterior'], x['saldo_pendiente']), reverse=True)
         return pending
 
     except Exception as e:

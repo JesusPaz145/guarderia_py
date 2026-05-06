@@ -22,6 +22,10 @@
                     <input type="text" id="filtroNino" onkeyup="filtrarNinos()" placeholder="Buscar niño para cobrar..."
                         class="pl-10 pr-4 py-2 w-full border border-gray-100 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none bg-gray-50">
                 </div>
+                <button onclick="toggleSemanaActual()" id="btnSemanaActual"
+                    class="text-sm font-bold text-gray-500 hover:text-gray-700 whitespace-nowrap px-4">
+                    Mostrar semana actual
+                </button>
                 <button onclick="seleccionarTodosToggle()" id="btnSeleccionarTodos"
                     class="text-sm font-bold text-pink-600 hover:text-pink-700 whitespace-nowrap px-4">
                     Seleccionar Todos
@@ -39,13 +43,24 @@
                 {% for item in pending_payments %}
                 <div onclick="toggleNinoSelection(this, '{{ item.id_nino }}', '{{ item.nombre }}', {{ item.saldo_pendiente }})"
                     data-nombre="{{ item.nombre }}"
+                    data-solo-actual="{{ 'true' if item.solo_actual else 'false' }}"
+                    {% if item.solo_actual %}style="display: none;"{% endif %}
                     class="nino-card border-2 border-transparent rounded-3xl p-5 cursor-pointer hover:shadow-md transition-all text-center relative bg-white shadow-sm ring-1 ring-gray-100">
                     <div
                         class="w-14 h-14 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mx-auto mb-3 font-black text-xl shadow-inner">
                         {{ item.nombre[0]|upper }}
                     </div>
                     <h4 class="font-bold text-gray-800 text-sm truncate">{{ item.nombre }}</h4>
-                    <p class="text-pink-600 font-black text-sm mt-1">${{ "%.2f"|format(item.saldo_pendiente) }}</p>
+                    {% if item.deuda_anterior > 0 and item.deuda_actual > 0 %}
+                    <p class="text-pink-600 font-black text-sm mt-1">
+                        ${{ "%.2f"|format(item.deuda_anterior) }}
+                        <span class="text-green-500 font-bold text-xs">(+${{ "%.2f"|format(item.deuda_actual) }})</span>
+                    </p>
+                    {% elif item.deuda_anterior > 0 %}
+                    <p class="text-pink-600 font-black text-sm mt-1">${{ "%.2f"|format(item.deuda_anterior) }}</p>
+                    {% else %}
+                    <p class="text-pink-600 font-black text-sm mt-1">${{ "%.2f"|format(item.deuda_actual) }}</p>
+                    {% endif %}
 
                     <!-- Indicador de selección -->
                     <div
@@ -428,12 +443,35 @@
         });
     }
 
-    function filtrarNinos() {
-        const input = document.getElementById('filtroNino').value.toLowerCase();
+    let mostrarSemanaActual = false;
+
+    function aplicarVisibilidad() {
+        const filtroTexto = document.getElementById('filtroNino').value.toLowerCase();
         document.querySelectorAll('.nino-card').forEach(card => {
             const nombre = card.getAttribute('data-nombre').toLowerCase();
-            card.style.display = nombre.includes(input) ? '' : 'none';
+            const soloActual = card.getAttribute('data-solo-actual') === 'true';
+            const matchesSearch = nombre.includes(filtroTexto);
+            const allowedBySemana = mostrarSemanaActual || !soloActual;
+            card.style.display = (matchesSearch && allowedBySemana) ? '' : 'none';
         });
+    }
+
+    function filtrarNinos() {
+        aplicarVisibilidad();
+    }
+
+    function toggleSemanaActual() {
+        mostrarSemanaActual = !mostrarSemanaActual;
+        const btn = document.getElementById('btnSemanaActual');
+        btn.innerText = mostrarSemanaActual ? 'Ocultar semana actual' : 'Mostrar semana actual';
+        if (mostrarSemanaActual) {
+            btn.classList.remove('text-gray-500');
+            btn.classList.add('text-pink-600');
+        } else {
+            btn.classList.add('text-gray-500');
+            btn.classList.remove('text-pink-600');
+        }
+        aplicarVisibilidad();
     }
 
     function seleccionarTodosToggle() {
