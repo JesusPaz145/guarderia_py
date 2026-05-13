@@ -10,7 +10,7 @@ from database import (
                       get_date_ninos_asistencia, get_date_employees_asistencia,
                       update_asistencia, delete_asistencia, get_week_ninos_unique_count,
                       get_week_ninos_total, get_week_daily_amounts, get_week_employees_earnings, 
-                       get_current_time, add_pago, get_recent_pagos, get_pending_payments, 
+                       get_current_time, add_pago, add_pago_dividido, get_recent_pagos, get_pending_payments, 
                        get_week_gastos, add_gasto, update_gasto, delete_gasto,
                        verify_employee_credentials, get_ninos_con_deuda,
                        get_grouped_pagos, get_pagos_group_details, delete_pago,
@@ -551,6 +551,57 @@ def registrar_pago_multiple():
 
     except Exception as e:
         print(f"Error al registrar pago múltiple: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/registrar_pago_dividido', methods=['POST'])
+def registrar_pago_dividido():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json
+        id_nino = int(data.get('id_nino'))
+        fecha = data.get('fecha')
+        partes = data.get('pagos', [])
+
+        if not id_nino or not fecha or len(partes) != 2:
+            return jsonify({'error': 'Faltan datos para registrar el pago dividido.'}), 400
+
+        total_partes = 0
+        empleados = []
+        for parte in partes:
+            monto = float(parte.get('monto'))
+            id_empleado = int(parte.get('id_empleado'))
+            tipo = parte.get('tipo')
+
+            if monto <= 0 or not id_empleado or not tipo:
+                return jsonify({'error': 'Cada parte debe tener empleada, método y monto mayor que cero.'}), 400
+
+            total_partes += monto
+            empleados.append(id_empleado)
+
+        if len(set(empleados)) != 2:
+            return jsonify({'error': 'Selecciona dos empleadas diferentes para dividir el pago.'}), 400
+
+        pending = next(
+            (p for p in get_pending_payments() if int(p['id_nino']) == id_nino),
+            None
+        )
+        saldo_pendiente = float(pending['saldo_pendiente']) if pending else 0
+        if total_partes > saldo_pendiente + 0.01:
+            return jsonify({
+                'error': f'El pago dividido no puede superar el saldo pendiente del niño (${saldo_pendiente:.2f}).'
+            }), 400
+
+        result = add_pago_dividido(fecha, id_nino, partes)
+        if result:
+            return jsonify({'success': True, 'data': result})
+
+        return jsonify({'error': 'No se pudo registrar el pago dividido.'}), 500
+    except (ValueError, TypeError) as e:
+        print(f"Datos inválidos en pago dividido: {e}")
+        return jsonify({'error': 'Datos inválidos para el pago dividido.'}), 400
+    except Exception as e:
+        print(f"Error al registrar pago dividido: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pagos/registrar_multiple', methods=['POST'])

@@ -41,7 +41,7 @@
                 {% endif %}
 
                 {% for item in pending_payments %}
-                <div onclick="toggleNinoSelection(this, '{{ item.id_nino }}', '{{ item.nombre }}', {{ item.saldo_pendiente }})"
+                <div onclick="toggleNinoSelection(this, '{{ item.id_nino }}', '{{ item.nombre }}', {{ item.deuda_anterior }}, {{ item.deuda_actual }})"
                     data-nombre="{{ item.nombre }}"
                     data-solo-actual="{{ 'true' if item.solo_actual else 'false' }}"
                     {% if item.solo_actual %}style="display: none;"{% endif %}
@@ -132,7 +132,7 @@
 <!-- Modal: Confirmación de Pago (Ya con selección hecha) -->
 <div id="modalConfirmar"
     class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up">
+    <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-slide-up">
         <div class="p-8 pb-4">
             <div class="flex justify-between items-start mb-6">
                 <div>
@@ -159,8 +159,14 @@
 
                 <!-- Desglose de Niños -->
                 <div class="space-y-3">
-                    <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Desglose
-                        por niño</label>
+                    <div class="flex items-center justify-between gap-3 px-1">
+                        <label class="block text-xs font-black text-gray-400 uppercase tracking-widest">Desglose
+                            por niño</label>
+                        <button id="btnIncluirSemanaActual" onclick="toggleSemanaActualModal()" type="button"
+                            class="hidden text-xs font-black bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded-full shadow-md shadow-pink-200 transition-all transform active:scale-95 whitespace-nowrap">
+                            + Semana actual
+                        </button>
+                    </div>
                     <div id="listaNinosConfirmar" class="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                         <!-- Se puebla por JS -->
                     </div>
@@ -168,19 +174,27 @@
 
                 <!-- Controles -->
                 <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">¿Quién
-                            cobró?</label>
-                        <select id="selectEmpleado"
-                            class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
-                            {% for emp in employees_activos %}
-                            <option value="{{ emp.id }}">{{ emp.nombre }}</option>
-                            {% endfor %}
-                            <option value="9">Caja / Casa</option>
-                        </select>
+                    <div id="splitToggleContainer" class="hidden bg-pink-50 border border-pink-100 rounded-2xl p-4">
+                        <label class="flex items-center justify-between gap-4 cursor-pointer">
+                            <span class="text-sm font-black text-pink-600">Dividir pago</span>
+                            <input id="checkDividirPago" type="checkbox" onchange="toggleDividirPago()"
+                                class="h-5 w-5 rounded-lg text-pink-600 focus:ring-pink-500">
+                        </label>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div id="normalPaymentControls" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">¿Quién
+                                cobró?</label>
+                            <select id="selectEmpleado"
+                                class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
+                                {% for emp in employees_activos %}
+                                <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                                {% endfor %}
+                                <option value="9">Caja / Casa</option>
+                            </select>
+                        </div>
+
                         <div>
                             <label
                                 class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Método</label>
@@ -190,19 +204,51 @@
                                 <option value="Zelle">Zelle 📱</option>
                             </select>
                         </div>
-                        <div>
-                            <label
-                                class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Fecha</label>
-                            <input type="date" id="selectFecha" value="{{ get_current_time().strftime('%Y-%m-%d') }}"
-                                class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
+                    </div>
+
+                    <div id="splitPaymentControls" class="hidden space-y-3">
+                        {% for idx in [1, 2] %}
+                        <div class="bg-gray-50 rounded-3xl p-4 border border-gray-100 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Parte {{ idx }}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400">$</span>
+                                    <input id="splitMonto{{ idx }}" type="number" step="0.01" min="0"
+                                        oninput="actualizarTotalDividido()"
+                                        class="w-24 bg-white border-0 rounded-xl py-2 px-3 text-right font-black text-pink-600 focus:ring-2 focus:ring-pink-500 text-sm">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <select id="splitEmpleado{{ idx }}"
+                                    class="min-w-0 px-3 py-3 bg-white border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700 text-sm">
+                                    {% for emp in employees_activos %}
+                                    <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                                    {% endfor %}
+                                    <option value="9">Caja / Casa</option>
+                                </select>
+                                <select id="splitMetodo{{ idx }}"
+                                    class="min-w-0 px-3 py-3 bg-white border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700 text-sm">
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Zelle">Zelle</option>
+                                </select>
+                            </div>
                         </div>
+                        {% endfor %}
+                        <p id="splitAviso" class="hidden text-xs font-bold text-red-400 px-1"></p>
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Fecha</label>
+                        <input type="date" id="selectFecha" value="{{ get_current_time().strftime('%Y-%m-%d') }}"
+                            class="w-full px-5 py-4 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-pink-500 focus:outline-none font-bold text-gray-700">
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="p-8">
-            <button onclick="finalizarRegistro()"
+            <button onclick="finalizarRegistro(event)"
                 class="w-full bg-pink-600 hover:bg-pink-700 text-white font-black py-5 rounded-3xl shadow-lg transition-all transform active:scale-95 shadow-pink-200">
                 CONFIRMAR Y GUARDAR
             </button>
@@ -313,8 +359,33 @@
 
 <script>
     let seleccionados = [];
+    let incluirSemanaActual = false;
 
-    function toggleNinoSelection(element, id, nombre, monto) {
+    function montoBaseNino(deudaAnterior, deudaActual) {
+        return deudaAnterior > 0 ? deudaAnterior : deudaActual;
+    }
+
+    function totalNino(deudaAnterior, deudaActual) {
+        return deudaAnterior + deudaActual;
+    }
+
+    function montoActivoNino(s) {
+        return incluirSemanaActual ? totalNino(s.deudaAnterior, s.deudaActual) : montoBaseNino(s.deudaAnterior, s.deudaActual);
+    }
+
+    function montoPagoNino(s) {
+        return s.monto_editado !== undefined ? s.monto_editado : s.monto;
+    }
+
+    function totalSeleccionado() {
+        return seleccionados.reduce((sum, s) => sum + montoPagoNino(s), 0);
+    }
+
+    function tieneDeudaSemanaActual() {
+        return seleccionados.some(s => s.deudaActual > 0 && s.deudaAnterior > 0);
+    }
+
+    function toggleNinoSelection(element, id, nombre, deudaAnterior, deudaActual) {
         const index = seleccionados.findIndex(s => s.id === id);
         if (index > -1) {
             seleccionados.splice(index, 1);
@@ -322,7 +393,15 @@
             element.querySelector('.check-mark').classList.add('opacity-0');
             element.querySelector('.check-mark').classList.add('scale-50');
         } else {
-            seleccionados.push({ id, nombre, monto });
+            const anterior = parseMonto(deudaAnterior);
+            const actual = parseMonto(deudaActual);
+            seleccionados.push({
+                id,
+                nombre,
+                deudaAnterior: anterior,
+                deudaActual: actual,
+                monto: montoBaseNino(anterior, actual)
+            });
             element.classList.add('ring-4', 'ring-pink-500', 'border-pink-500', 'bg-pink-50', 'scale-95');
             element.querySelector('.check-mark').classList.remove('opacity-0');
             element.querySelector('.check-mark').classList.remove('scale-50');
@@ -333,7 +412,7 @@
 
     function actualizarVistaBotones() {
         const container = document.getElementById('floatingBtnContainer');
-        const total = seleccionados.reduce((sum, s) => sum + s.monto, 0);
+        const total = totalSeleccionado();
 
         if (seleccionados.length > 0) {
             container.classList.remove('hidden');
@@ -345,36 +424,164 @@
     }
 
     function abrirModalConfirmacion() {
-        const total = seleccionados.reduce((sum, s) => sum + s.monto, 0);
-        document.getElementById('modalTotal').innerText = `$${total.toFixed(2)}`;
+        incluirSemanaActual = false;
+        seleccionados.forEach(s => {
+            s.monto = montoActivoNino(s);
+            delete s.monto_editado;
+        });
+
+        renderListaNinosConfirmar();
+        actualizarBotonSemanaActualModal();
+        resetDividirPago();
+        document.getElementById('modalConfirmar').classList.remove('hidden');
+    }
+
+    function renderListaNinosConfirmar() {
+        document.getElementById('modalTotal').innerText = `$${totalSeleccionado().toFixed(2)}`;
         document.getElementById('modalCount').innerText = seleccionados.length;
 
-        // Poblar lista de niños con inputs
         let html = '';
         seleccionados.forEach(s => {
+            const monto = montoPagoNino(s);
+            const max = montoActivoNino(s);
             html += `
             <div class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
                 <span class="text-sm font-bold text-gray-700 truncate mr-2">${s.nombre}</span>
                 <div class="flex items-center gap-2">
                     <span class="text-[10px] font-bold text-gray-400 uppercase">$</span>
-                    <input type="number" step="0.01" value="${s.monto.toFixed(2)}" 
-                        onchange="validarMontoItem(this, ${s.monto}, '${s.id}')"
+                    <input type="number" step="0.01" value="${monto.toFixed(2)}" 
+                        onchange="validarMontoItem(this, '${s.id}')"
                         class="w-20 bg-white border-0 rounded-lg py-1 px-2 text-right font-black text-pink-600 focus:ring-2 focus:ring-pink-500 text-sm"
-                        data-nino-id="${s.id}">
+                        data-nino-id="${s.id}" data-max="${max.toFixed(2)}">
                 </div>
             </div>`;
         });
         document.getElementById('listaNinosConfirmar').innerHTML = html;
-
-        document.getElementById('modalConfirmar').classList.remove('hidden');
     }
 
-    function validarMontoItem(input, max, id_nino) {
+    function parseMonto(value) {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+
+    function estaDividiendoPago() {
+        const checkbox = document.getElementById('checkDividirPago');
+        return seleccionados.length === 1 && checkbox && checkbox.checked;
+    }
+
+    function montoObjetivoSplit() {
+        return seleccionados.length === 1 ? montoPagoNino(seleccionados[0]) : 0;
+    }
+
+    function prepararMontosDivididos(total) {
+        const totalCentavos = Math.round(total * 100);
+        const primerMonto = Math.floor(totalCentavos / 2) / 100;
+        const segundoMonto = (totalCentavos - Math.floor(totalCentavos / 2)) / 100;
+        document.getElementById('splitMonto1').value = primerMonto.toFixed(2);
+        document.getElementById('splitMonto2').value = segundoMonto.toFixed(2);
+        actualizarTotalDividido();
+    }
+
+    function bloquearMontoNino(bloqueado) {
+        document.querySelectorAll('#listaNinosConfirmar input').forEach(input => {
+            input.disabled = bloqueado;
+            input.classList.toggle('opacity-50', bloqueado);
+            input.classList.toggle('cursor-not-allowed', bloqueado);
+        });
+    }
+
+    function resetDividirPago() {
+        const toggleContainer = document.getElementById('splitToggleContainer');
+        const checkbox = document.getElementById('checkDividirPago');
+        const splitControls = document.getElementById('splitPaymentControls');
+        const normalControls = document.getElementById('normalPaymentControls');
+        const aviso = document.getElementById('splitAviso');
+
+        checkbox.checked = false;
+        toggleContainer.classList.toggle('hidden', seleccionados.length !== 1);
+        splitControls.classList.add('hidden');
+        normalControls.classList.remove('hidden');
+        aviso.classList.add('hidden');
+        bloquearMontoNino(false);
+
+        if (seleccionados.length === 1) {
+            prepararMontosDivididos(montoObjetivoSplit());
+        }
+    }
+
+    function toggleDividirPago() {
+        const activo = estaDividiendoPago();
+        document.getElementById('splitPaymentControls').classList.toggle('hidden', !activo);
+        document.getElementById('normalPaymentControls').classList.toggle('hidden', activo);
+        bloquearMontoNino(activo);
+
+        if (activo) {
+            const total = montoActivoNino(seleccionados[0]);
+            seleccionados[0].monto = total;
+            delete seleccionados[0].monto_editado;
+            document.querySelectorAll('#listaNinosConfirmar input').forEach(input => {
+                input.value = total.toFixed(2);
+                input.dataset.max = total.toFixed(2);
+            });
+            document.getElementById('modalTotal').innerText = `$${total.toFixed(2)}`;
+            prepararMontosDivididos(total);
+        }
+    }
+
+    function actualizarTotalDividido() {
+        const aviso = document.getElementById('splitAviso');
+        const total = parseMonto(document.getElementById('splitMonto1').value) + parseMonto(document.getElementById('splitMonto2').value);
+        const objetivo = montoObjetivoSplit();
+        const correcto = Math.abs(total - objetivo) <= 0.01;
+
+        if (!correcto) {
+            aviso.textContent = `La suma debe ser $${objetivo.toFixed(2)}. Ahora suma $${total.toFixed(2)}.`;
+            aviso.classList.remove('hidden');
+        } else {
+            aviso.classList.add('hidden');
+        }
+
+        return correcto;
+    }
+
+    function actualizarBotonSemanaActualModal() {
+        const btn = document.getElementById('btnIncluirSemanaActual');
+        const disponible = tieneDeudaSemanaActual();
+        btn.classList.toggle('hidden', !disponible);
+        if (incluirSemanaActual) {
+            btn.classList.remove('bg-pink-600', 'hover:bg-pink-700', 'text-white', 'shadow-md', 'shadow-pink-200');
+            btn.classList.add('bg-white', 'border', 'border-pink-600', 'text-pink-600', 'hover:bg-pink-50');
+        } else {
+            btn.classList.remove('bg-white', 'border', 'border-pink-600', 'text-pink-600', 'hover:bg-pink-50');
+            btn.classList.add('bg-pink-600', 'hover:bg-pink-700', 'text-white', 'shadow-md', 'shadow-pink-200');
+        }
+        btn.innerText = incluirSemanaActual ? '✕ Quitar semana actual' : '+ Semana actual';
+    }
+
+    function toggleSemanaActualModal() {
+        incluirSemanaActual = !incluirSemanaActual;
+        seleccionados.forEach(s => {
+            s.monto = montoActivoNino(s);
+            delete s.monto_editado;
+        });
+
+        renderListaNinosConfirmar();
+        actualizarBotonSemanaActualModal();
+
+        const dividiendo = estaDividiendoPago();
+        bloquearMontoNino(dividiendo);
+        if (dividiendo) {
+            prepararMontosDivididos(montoObjetivoSplit());
+        }
+    }
+
+    function validarMontoItem(input, id_nino) {
         let valor = parseFloat(input.value);
         if (isNaN(valor)) valor = 0;
+        const max = parseMonto(input.dataset.max);
 
         if (valor > max) {
-            alert(`No puedes cobrar más de la deuda actual ($${max.toFixed(2)})`);
+            alert(`No puedes cobrar más del monto disponible ($${max.toFixed(2)})`);
             valor = max;
         } else if (valor < 0) {
             valor = 0;
@@ -393,16 +600,87 @@
         let nuevoTotal = 0;
         inputs.forEach(inp => nuevoTotal += parseFloat(inp.value));
         document.getElementById('modalTotal').innerText = `$${nuevoTotal.toFixed(2)}`;
+        actualizarVistaBotones();
     }
 
     function cerrarModalConfirmar() {
         document.getElementById('modalConfirmar').classList.add('hidden');
     }
 
-    function finalizarRegistro() {
+    function construirPayloadDividido(fecha) {
+        if (!actualizarTotalDividido()) {
+            alert('Los montos divididos deben sumar el monto seleccionado del niño.');
+            return null;
+        }
+
+        const empleado1 = document.getElementById('splitEmpleado1').value;
+        const empleado2 = document.getElementById('splitEmpleado2').value;
+        if (empleado1 === empleado2) {
+            alert('Selecciona dos empleadas diferentes para dividir el pago.');
+            return null;
+        }
+
+        const monto1 = parseMonto(document.getElementById('splitMonto1').value);
+        const monto2 = parseMonto(document.getElementById('splitMonto2').value);
+        if (monto1 <= 0 || monto2 <= 0) {
+            alert('Cada parte del pago dividido debe ser mayor que cero.');
+            return null;
+        }
+
+        return {
+            id_nino: seleccionados[0].id,
+            fecha,
+            pagos: [
+                {
+                    id_empleado: empleado1,
+                    tipo: document.getElementById('splitMetodo1').value,
+                    monto: monto1
+                },
+                {
+                    id_empleado: empleado2,
+                    tipo: document.getElementById('splitMetodo2').value,
+                    monto: monto2
+                }
+            ]
+        };
+    }
+
+    function restaurarBotonGuardar(btn) {
+        btn.disabled = false;
+        btn.innerText = 'CONFIRMAR Y GUARDAR';
+    }
+
+    function finalizarRegistro(event) {
         const id_empleado = document.getElementById('selectEmpleado').value;
         const metodo = document.getElementById('selectMetodo').value;
         const fecha = document.getElementById('selectFecha').value;
+        const btn = event.target;
+
+        if (estaDividiendoPago()) {
+            const payloadDividido = construirPayloadDividido(fecha);
+            if (!payloadDividido) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> GUARDANDO...';
+
+            fetch('/api/pagos/registrar_pago_dividido', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payloadDividido)
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    document.getElementById('modalConfirmar').classList.add('hidden');
+                    document.getElementById('modalExito').classList.remove('hidden');
+                } else {
+                    alert('Error: ' + data.error);
+                    restaurarBotonGuardar(btn);
+                }
+            }).catch(err => {
+                alert('Error de conexión');
+                restaurarBotonGuardar(btn);
+            });
+            return;
+        }
 
         // Mapear seleccionados al formato que espera /api/pagos/registrar_pago_multiple
         const pagos = seleccionados.map(s => ({
@@ -414,7 +692,6 @@
         }));
 
         // Bloquear botón para evitar doble click
-        const btn = event.target;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> GUARDANDO...';
 
@@ -428,13 +705,11 @@
                 document.getElementById('modalExito').classList.remove('hidden');
             } else {
                 alert('Error: ' + data.error);
-                btn.disabled = false;
-                btn.innerText = 'CONFIRMAR Y GUARDAR';
+                restaurarBotonGuardar(btn);
             }
         }).catch(err => {
             alert('Error de conexión');
-            btn.disabled = false;
-            btn.innerText = 'CONFIRMAR Y GUARDAR';
+            restaurarBotonGuardar(btn);
         });
     }
 

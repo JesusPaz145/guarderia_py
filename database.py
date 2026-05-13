@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta # Asegúrate de que esta línea esté aquí al principio
 import pytz
+import uuid
 
 # Intentar importar supabase; si no está disponible, crear un cliente de respaldo (fake)
 try:
@@ -992,54 +993,132 @@ def get_week_employees_earnings(start_of_week, end_of_week):
         print(f"ERROR: Fallo en get_week_employees_earnings: {e}")
         return []
 
+SPLIT_TIPO_MARKER = ' [DIV:'
+
+def _format_split_tipo(tipo, split_group_id):
+    return f"{tipo}{SPLIT_TIPO_MARKER}{split_group_id}]"
+
+def _display_tipo(tipo):
+    if not tipo:
+        return 'Efectivo'
+    return str(tipo).split(SPLIT_TIPO_MARKER, 1)[0]
+
+def _split_group_id(tipo):
+    if not tipo or SPLIT_TIPO_MARKER not in str(tipo):
+        return None
+
+    raw_group = str(tipo).split(SPLIT_TIPO_MARKER, 1)[1]
+    return raw_group[:-1] if raw_group.endswith(']') else raw_group
+
+def _insert_pago_record(fecha, id_nino, id_empleado, monto, tipo):
+    data = {
+        "date": fecha,
+        "id_nino": id_nino,
+        "id_empleado": id_empleado,
+        "monto": float(monto),
+        "tipo": tipo
+    }
+
+    response = supabase.table('pagos').insert(data).execute()
+    return response.data[0] if response.data else None
+
+def _mark_asistencias_pagadas(id_nino, monto, pago_id):
+    unpaid = supabase.from_('asistencia').select('id, valor') \
+        .eq('tipo', 'nino').eq('id_persona', id_nino).eq('pagado', False) \
+        .order('fecha', desc=False).order('id', desc=False).execute()
+
+    monto_restante = float(monto)
+    EPSILON = 0.001
+    for a in (unpaid.data or []):
+        valor = float(a.get('valor') or 0)
+        if valor <= 0:
+            continue
+        if monto_restante + EPSILON >= valor:
+            supabase.from_('asistencia').update({
+                'pagado': True,
+                'id_pago': pago_id
+            }).eq('id', a['id']).execute()
+            monto_restante -= valor
+        if monto_restante <= EPSILON:
+            break
+
+def _adjust_nino_saldo(id_nino, delta):
+    child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
+    if child.data:
+        old_saldo = float(child.data[0].get('saldo') or 0)
+        new_saldo = old_saldo + float(delta)
+        supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
+        return new_saldo
+    return None
+
 def add_pago(fecha, id_nino, id_empleado, monto, tipo):
     """Agregar un nuevo pago. Marca asistencias pendientes FIFO hasta cubrir el monto."""
     try:
-        data = {
-            "date": fecha,
-            "id_nino": id_nino,
-            "id_empleado": id_empleado,
-            "monto": float(monto),
-            "tipo": tipo  # 'Efectivo' o 'Zelle'
-        }
-
-        response = supabase.table('pagos').insert(data).execute()
-        if not response.data:
+        pago = _insert_pago_record(fecha, id_nino, id_empleado, monto, tipo)
+        if not pago:
             return None
 
-        pago = response.data[0]
         pago_id = pago['id']
 
         # Marcar asistencias pendientes del niño (más viejas primero) hasta consumir el monto
-        unpaid = supabase.from_('asistencia').select('id, valor') \
-            .eq('tipo', 'nino').eq('id_persona', id_nino).eq('pagado', False) \
-            .order('fecha', desc=False).order('id', desc=False).execute()
-
-        monto_restante = float(monto)
-        EPSILON = 0.001
-        for a in (unpaid.data or []):
-            valor = float(a.get('valor') or 0)
-            if valor <= 0:
-                continue
-            if monto_restante + EPSILON >= valor:
-                supabase.from_('asistencia').update({
-                    'pagado': True,
-                    'id_pago': pago_id
-                }).eq('id', a['id']).execute()
-                monto_restante -= valor
-            if monto_restante <= EPSILON:
-                break
+        _mark_asistencias_pagadas(id_nino, monto, pago_id)
 
         # (Legado) Mantener ninos.saldo sincronizado hasta que se complete la migración
-        child = supabase.table('ninos').select('saldo').eq('id', id_nino).execute()
-        if child.data:
-            old_saldo = float(child.data[0].get('saldo') or 0)
-            new_saldo = old_saldo - float(monto)
-            supabase.table('ninos').update({'saldo': new_saldo}).eq('id', id_nino).execute()
+        _adjust_nino_saldo(id_nino, -float(monto))
 
         return pago
     except Exception as e:
         print(f"Error al agregar pago: {e}")
+        return None
+
+def add_pago_dividido(fecha, id_nino, partes):
+    """Registrar dos pagos para un niño, liquidando asistencias con la suma total."""
+    inserted = []
+    try:
+        if len(partes) != 2:
+            raise ValueError("El pago dividido requiere exactamente 2 partes")
+
+        split_group_id = uuid.uuid4().hex
+        total = 0
+
+        for parte in partes:
+            monto = float(parte['monto'])
+            if monto <= 0:
+                raise ValueError("Cada parte del pago dividido debe ser mayor que cero")
+
+            pago = _insert_pago_record(
+                fecha,
+                id_nino,
+                int(parte['id_empleado']),
+                monto,
+                _format_split_tipo(parte['tipo'], split_group_id)
+            )
+            if not pago:
+                raise RuntimeError("No se pudo insertar una parte del pago dividido")
+
+            inserted.append(pago)
+            total += monto
+
+        # Se liquidan las asistencias usando el total combinado para no perder remanentes.
+        _mark_asistencias_pagadas(id_nino, total, inserted[-1]['id'])
+        _adjust_nino_saldo(id_nino, -total)
+
+        return inserted
+    except Exception as e:
+        print(f"Error al agregar pago dividido: {e}")
+        if inserted:
+            try:
+                supabase.from_('asistencia').update({
+                    'pagado': False,
+                    'id_pago': None
+                }).in_('id_pago', [p['id'] for p in inserted]).execute()
+            except Exception as rollback_error:
+                print(f"Error al deshacer asistencias de pago dividido parcial: {rollback_error}")
+        for pago in inserted:
+            try:
+                supabase.table('pagos').delete().eq('id', pago['id']).execute()
+            except Exception as rollback_error:
+                print(f"Error al deshacer pago dividido parcial: {rollback_error}")
         return None
 
 def delete_pago(pago_id):
@@ -1053,6 +1132,53 @@ def delete_pago(pago_id):
         pago = pago_resp.data[0]
         id_nino = pago['id_nino']
         monto = float(pago['monto'])
+        split_group_id = _split_group_id(pago.get('tipo'))
+        if split_group_id:
+            pagos_resp = supabase.from_('pagos').select('*') \
+                .eq('id_nino', id_nino).eq('date', pago['date']).execute()
+            pagos_grupo = [
+                p for p in (pagos_resp.data or [])
+                if _split_group_id(p.get('tipo')) == split_group_id
+            ]
+
+            if not pagos_grupo:
+                pagos_grupo = [pago]
+
+            pago_ids = [p['id'] for p in pagos_grupo]
+            monto_total = sum(float(p.get('monto') or 0) for p in pagos_grupo)
+
+            linked = supabase.from_('asistencia').select('id').in_('id_pago', pago_ids).execute()
+            linked_ids = [a['id'] for a in (linked.data or [])]
+
+            if linked_ids:
+                supabase.from_('asistencia').update({
+                    'pagado': False,
+                    'id_pago': None
+                }).in_('id_pago', pago_ids).execute()
+            else:
+                paid = supabase.from_('asistencia').select('id, valor, fecha') \
+                    .eq('tipo', 'nino').eq('id_persona', id_nino).eq('pagado', True) \
+                    .is_('id_pago', 'null') \
+                    .order('fecha', desc=True).order('id', desc=True).execute()
+
+                monto_restante = monto_total
+                EPSILON = 0.001
+                for a in (paid.data or []):
+                    valor = float(a.get('valor') or 0)
+                    if valor <= 0:
+                        continue
+                    if monto_restante + EPSILON >= valor:
+                        supabase.from_('asistencia').update({'pagado': False}) \
+                            .eq('id', a['id']).execute()
+                        monto_restante -= valor
+                    if monto_restante <= EPSILON:
+                        break
+
+            supabase.table('pagos').delete().in_('id', pago_ids).execute()
+            new_saldo = _adjust_nino_saldo(id_nino, monto_total)
+            if new_saldo is not None:
+                print(f"Pago dividido revertido. Nuevo saldo del niño {id_nino}: {new_saldo}")
+            return True
 
         # 1a. Asistencias linkeadas a este pago (caso normal del código nuevo)
         linked = supabase.from_('asistencia').select('id').eq('id_pago', pago_id).execute()
@@ -1144,7 +1270,7 @@ def get_recent_pagos(limit=10):
                     'id': item.get('id', 'N/A'),
                     'date': item.get('date', 'N/A'),
                     'monto': float(item.get('monto', 0)),
-                    'tipo': item.get('tipo', 'N/A'),
+                    'tipo': _display_tipo(item.get('tipo', 'N/A')),
                     'nombre_nino': nombre_nino,
                     'nombre_empleada': nombre_empleada
                 }
@@ -1378,7 +1504,7 @@ def get_grouped_pagos(limit=20):
             fecha = item.get('date')
             empleada_dict = item.get('employees')
             empleada_id = item.get('id_empleado')
-            tipo = item.get('tipo', 'Efectivo')
+            tipo = _display_tipo(item.get('tipo', 'Efectivo'))
             nino_dict = item.get('ninos')
             nino_nombre = nino_dict.get('nombre', 'Desconocido') if nino_dict else 'Desconocido'
             pago_id = item.get('id')
@@ -1441,7 +1567,7 @@ def get_pagos_group_details(fecha, id_empleada):
                     'id': item.get('id'),
                     'nombre_nino': nino_dict.get('nombre', 'Desconocido') if nino_dict else 'Desconocido',
                     'monto': float(item.get('monto', 0)),
-                    'tipo': item.get('tipo', 'Efectivo')
+                    'tipo': _display_tipo(item.get('tipo', 'Efectivo'))
                 })
             return details
         return []
