@@ -78,45 +78,41 @@
                 <div class="px-6 py-4 bg-gray-50/50 border-b border-gray-100">
                     <h2 class="text-sm font-black text-gray-400 uppercase tracking-widest">Últimos Pagos</h2>
                 </div>
-                <div class="max-h-[calc(100vh-200px)] overflow-y-auto">
-                    <table class="min-w-full">
-                        <tbody class="divide-y divide-gray-50">
-                            {% for group in recent_pagos %}
-                            <tr onclick="verDetallesGrupo('{{ group.fecha }}', '{{ group.id_empleada }}', '{{ group.nombre_empleada }}', '{{ group.total }}')"
-                                class="hover:bg-pink-50/50 cursor-pointer transition-colors group relative">
-                                <td class="px-6 py-4">
-                                    <div class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{{
-                                        group.fecha }}</div>
-                                    <div class="text-xs font-bold text-gray-700 flex flex-col">
-                                        <span>{{ group.nombre_empleada }} • <span class="text-pink-400">{{ group.tipo
-                                                }}</span></span>
-                                        <span class="text-[10px] text-gray-400 font-medium truncate max-w-[180px]">{{
-                                            group.ninos_resumen }}</span>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 text-right">
-                                    <div class="flex items-center justify-end gap-3">
-                                        <div class="flex flex-col items-end">
-                                            <div class="text-sm font-black text-pink-600">${{ "%.2f"|format(group.total)
-                                                }}</div>
-                                            <div class="text-[9px] text-gray-400">{{ group.cantidad_pagos }} pagos</div>
-                                        </div>
+                <div class="max-h-[calc(100vh-200px)] overflow-y-auto overflow-x-hidden">
+                    <div class="divide-y divide-gray-50">
+                        {% for group in recent_pagos %}
+                        <div onclick="verDetallesGrupo('{{ group.fecha }}', '{{ group.id_empleada }}', '{{ group.nombre_empleada }}', '{{ group.total }}')"
+                            class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 sm:px-6 py-4 hover:bg-pink-50/50 cursor-pointer transition-colors group">
+                            <div class="min-w-0">
+                                <div class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{{
+                                    group.fecha }}</div>
+                                <div class="text-xs font-bold text-gray-700 min-w-0">
+                                    <div class="truncate">{{ group.nombre_empleada }} • <span class="text-pink-400">{{
+                                            group.tipo }}</span></div>
+                                    <div class="text-[10px] text-gray-400 font-medium truncate">{{
+                                        group.ninos_resumen }}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end gap-1 sm:gap-3 shrink-0">
+                                <div class="flex flex-col items-end">
+                                    <div class="text-sm font-black text-pink-600 whitespace-nowrap">${{
+                                        "%.2f"|format(group.total) }}</div>
+                                    <div class="text-[9px] text-gray-400 whitespace-nowrap">{{ group.cantidad_pagos }}
+                                        pagos</div>
+                                </div>
 
-                                        {# Botón de REVERTIR GRUPO (Últimos 7 días) #}
-                                        {% if group.fecha >= fecha_limite_reversion %}
-                                        <button
-                                            onclick="event.stopPropagation(); revertirGrupo({{ group.pago_ids|tojson }})"
-                                            class="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                                            title="Revertir grupo completo">
-                                            <i class="fas fa-undo-alt text-xs"></i>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                {# Botón de REVERTIR GRUPO (Últimos 7 días) #}
+                                {% if group.fecha >= fecha_limite_reversion %}
+                                <button onclick="event.stopPropagation(); revertirGrupo({{ group.pago_ids|tojson }})"
+                                    class="h-8 w-8 shrink-0 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors"
+                                    title="Revertir grupo completo">
+                                    <i class="fas fa-undo-alt text-xs"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
