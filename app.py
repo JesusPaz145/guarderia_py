@@ -465,6 +465,7 @@ def pagos():
     # Obtenemos el historial agrupado por defecto (últimos 20 grupos)
     recent_pagos_grouped = get_grouped_pagos(limit=20)
     pending_payments = get_pending_payments()
+    fecha_limite_reversion = (get_current_time().date() - timedelta(days=6)).strftime('%Y-%m-%d')
     
     ninos_activos = get_active_ninos()
     employees_activos = get_active_employees()
@@ -475,6 +476,7 @@ def pagos():
                            pending_payments=pending_payments,
                            ninos_activos=ninos_activos,
                            employees_activos=employees_activos,
+                           fecha_limite_reversion=fecha_limite_reversion,
                            get_current_time=get_current_time)
 
 @app.route('/api/pagos/detalles')

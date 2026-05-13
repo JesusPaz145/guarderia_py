@@ -102,9 +102,8 @@
                                             <div class="text-[9px] text-gray-400">{{ group.cantidad_pagos }} pagos</div>
                                         </div>
 
-                                        {# Botón de REVERTIR GRUPO (Solo hoy/futuro) #}
-                                        {% set hoy = get_current_time().strftime('%Y-%m-%d') %}
-                                        {% if group.fecha >= hoy %}
+                                        {# Botón de REVERTIR GRUPO (Últimos 7 días) #}
+                                        {% if group.fecha >= fecha_limite_reversion %}
                                         <button
                                             onclick="event.stopPropagation(); revertirGrupo({{ group.pago_ids|tojson }})"
                                             class="p-2 text-gray-300 hover:text-red-500 transition-colors"
@@ -502,11 +501,8 @@
         document.getElementById('listaDetalles').innerHTML = '<li class="text-center text-gray-300 py-8"><i class="fas fa-circle-notch fa-spin text-2xl"></i></li>';
         document.getElementById('modalDetalles').classList.remove('hidden');
 
-        // Lógica de fecha para revertir (Solo hoy o futuro)
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const fechaPago = new Date(fecha + 'T00:00:00');
-        const esRevertible = fechaPago >= hoy;
+        // Lógica de fecha para revertir (hoy y 6 días hacia atrás)
+        const esRevertible = fecha >= '{{ fecha_limite_reversion }}';
 
         try {
             const res = await fetch(`/api/pagos/detalles?fecha=${fecha}&id_empleada=${id_emp}`);
