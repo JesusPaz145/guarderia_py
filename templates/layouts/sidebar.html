@@ -20,6 +20,12 @@
                 </a>
             </li>
             <li>
+                <a href="{{ url_for('resumen_pagos') }}" class="sidebar-item flex items-center py-3 px-6 {% if active_page == 'resumen_pagos' %}active{% endif %}">
+                    <i class="fas fa-hand-holding-dollar w-6 mr-3"></i>
+                    <span>Resumen Pagos</span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ url_for('hoy') }}" class="sidebar-item flex items-center py-3 px-6 {% if active_page == 'hoy' %}active{% endif %}">
                     <i class="fas fa-calendar-day w-6 mr-3"></i>
                     <span>Hoy</span>

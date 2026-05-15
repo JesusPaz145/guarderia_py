@@ -774,7 +774,7 @@ def get_week_children_summary(start_of_week, end_of_week):
             date_obj = start_of_week + timedelta(days=i)
             week_days.append({
                 'date': date_obj.isoformat(),
-                'label': ['Lunes', 'Martes', 'MiÃ©rcoles', 'Jueves', 'Viernes'][i]
+                'label': ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'][i]
             })
 
         nino_ids = list(set(item['id_persona'] for item in response.data))
@@ -826,7 +826,7 @@ def get_week_daily_amounts(start_date, end_date):
         # y las listas de nombres vacías.
         week_data = {
             (start_date + timedelta(days=i)).isoformat(): {
-                'day': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][(start_date + timedelta(days=i)).weekday()],
+                'day': ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][(start_date + timedelta(days=i)).weekday()],
                 'date': (start_date + timedelta(days=i)).isoformat(),
                 'amount': 0,
                 'ninos': [],
@@ -980,6 +980,7 @@ def get_week_employees_earnings(start_of_week, end_of_week):
             ganancia_total = stats['total_horas'] * pago_por_hora_semanal
             
             final_earnings.append({
+                'id': id_persona,
                 'nombre': nombre,
                 'total_horas': stats['total_horas'],
                 'total_ganancia': ganancia_total,
@@ -992,6 +993,146 @@ def get_week_employees_earnings(start_of_week, end_of_week):
     except Exception as e:
         print(f"ERROR: Fallo en get_week_employees_earnings: {e}")
         return []
+
+def get_week_attendance_payment_summary(start_date, end_date):
+    """Resumen de pagos basado en las asistencias de la semana, no en la fecha del pago."""
+    try:
+        start_date_str = start_date.isoformat()
+        end_date_str = end_date.isoformat()
+
+        query = supabase.from_('asistencia')\
+            .select('id, fecha, valor, id_persona, pagado, id_pago')\
+            .eq('tipo', 'nino')\
+            .gte('fecha', start_date_str).lte('fecha', end_date_str)\
+            .order('fecha', desc=False).order('id', desc=False)
+        attendance_data = fetch_all_paginated(query)
+
+        empty_summary = {
+            'employees': {},
+            'total_asistencias': 0,
+            'total_pagado': 0,
+            'total_pendiente': 0
+        }
+        if not attendance_data:
+            return empty_summary
+
+        nino_ids = list({item['id_persona'] for item in attendance_data})
+        nino_names = {}
+        if nino_ids:
+            ninos_response = supabase.from_('ninos').select('id, nombre').in_('id', nino_ids).execute()
+            if hasattr(ninos_response, 'data'):
+                nino_names = {item['id']: item['nombre'] for item in ninos_response.data}
+
+        pago_ids = list({
+            item.get('id_pago') for item in attendance_data
+            if item.get('pagado') and item.get('id_pago')
+        })
+        pagos_map = {}
+        if pago_ids:
+            pagos_response = supabase.from_('pagos').select('*, employees(nombre)').in_('id', pago_ids).execute()
+            if hasattr(pagos_response, 'data'):
+                for pago in pagos_response.data:
+                    employee_id = pago.get('id_empleado')
+                    employee_dict = pago.get('employees')
+                    if employee_id == 9:
+                        employee_name = 'Caja/Casa'
+                    elif isinstance(employee_dict, dict):
+                        employee_name = employee_dict.get('nombre', 'Desconocida')
+                    else:
+                        employee_name = 'Desconocida'
+
+                    pagos_map[pago.get('id')] = {
+                        'id': pago.get('id'),
+                        'id_empleado': employee_id,
+                        'nombre_empleada': employee_name,
+                        'fecha_pago': pago.get('date'),
+                        'tipo': _display_tipo(pago.get('tipo', 'Efectivo'))
+                    }
+
+        summary = {
+            'employees': {},
+            'total_asistencias': 0,
+            'total_pagado': 0,
+            'total_pendiente': 0
+        }
+
+        for item in attendance_data:
+            monto = float(item.get('valor') or 0)
+            summary['total_asistencias'] += monto
+
+            if not item.get('pagado'):
+                summary['total_pendiente'] += monto
+                continue
+
+            summary['total_pagado'] += monto
+            pago_info = pagos_map.get(item.get('id_pago'))
+            employee_id = pago_info.get('id_empleado') if pago_info else None
+            employee_key = str(employee_id) if employee_id is not None else 'sin_pago'
+            employee_name = pago_info.get('nombre_empleada') if pago_info else 'Pago sin detalle'
+            child_id = item.get('id_persona')
+            pago_id = item.get('id_pago')
+            child_key = f"{child_id}:{pago_id or 'sin_pago'}"
+
+            if employee_key not in summary['employees']:
+                summary['employees'][employee_key] = {
+                    'id': employee_id,
+                    'nombre': employee_name,
+                    'total_pagado': 0,
+                    'pagos': {}
+                }
+
+            employee_group = summary['employees'][employee_key]
+            employee_group['total_pagado'] += monto
+
+            if child_key not in employee_group['pagos']:
+                employee_group['pagos'][child_key] = {
+                    'id_nino': child_id,
+                    'nombre_nino': nino_names.get(child_id, 'Desconocido'),
+                    'monto': 0,
+                    'pago_ids': [],
+                    'fechas': [],
+                    'fecha_pago': pago_info.get('fecha_pago') if pago_info else None,
+                    'tipo': pago_info.get('tipo') if pago_info else ''
+                }
+
+            child_payment = employee_group['pagos'][child_key]
+            child_payment['monto'] += monto
+            child_payment['fechas'].append(item.get('fecha'))
+            if pago_id and pago_id not in child_payment['pago_ids']:
+                child_payment['pago_ids'].append(pago_id)
+
+        for employee_group in summary['employees'].values():
+            employee_group['total_pagado'] = round(employee_group['total_pagado'], 2)
+            pagos = list(employee_group['pagos'].values())
+            pagos.sort(key=lambda pago: pago.get('nombre_nino') or '')
+            employee_group['pagos'] = pagos
+
+        summary['total_asistencias'] = round(summary['total_asistencias'], 2)
+        summary['total_pagado'] = round(summary['total_pagado'], 2)
+        summary['total_pendiente'] = round(summary['total_pendiente'], 2)
+        return summary
+    except Exception as e:
+        print(f"ERROR: Fallo en get_week_attendance_payment_summary: {e}")
+        return {
+            'employees': {},
+            'total_asistencias': 0,
+            'total_pagado': 0,
+            'total_pendiente': 0
+        }
+
+def update_pagos_empleado(pago_ids, id_empleado):
+    """Cambiar la empleada que recibio uno o varios pagos."""
+    try:
+        clean_pago_ids = [int(pago_id) for pago_id in pago_ids if pago_id]
+        if not clean_pago_ids:
+            return False
+
+        supabase.from_('pagos').update({'id_empleado': int(id_empleado)})\
+            .in_('id', clean_pago_ids).execute()
+        return True
+    except Exception as e:
+        print(f"Error al reasignar pagos: {e}")
+        return False
 
 SPLIT_TIPO_MARKER = ' [DIV:'
 

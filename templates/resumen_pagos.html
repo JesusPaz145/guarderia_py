@@ -1,0 +1,175 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Resumen Pagos - Guarder&iacute;a{% endblock %}
+{% block header_title %}Resumen Pagos{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between gap-4 mb-8">
+  <a href="{{ url_for('resumen_pagos', date=prev_week_start_str) }}" class="bg-pink-500 hover:bg-pink-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300" title="Semana anterior">
+    <i class="fas fa-chevron-left text-xl"></i>
+  </a>
+  <div class="text-center min-w-0">
+    <h1 class="text-4xl font-extrabold text-pink-700 tracking-tight drop-shadow-sm">Resumen Pagos</h1>
+    <p class="text-lg text-pink-500 mt-2">{{ week_start_str }} - {{ week_end_str }}</p>
+  </div>
+  <a href="{{ url_for('resumen_pagos', date=next_week_start_str) }}" class="bg-pink-500 hover:bg-pink-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300" title="Semana siguiente">
+    <i class="fas fa-chevron-right text-xl"></i>
+  </a>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+  <div class="bg-white/80 border border-pink-100 rounded-xl shadow-sm p-4">
+    <p class="text-xs font-black text-pink-400 uppercase tracking-widest">Asistencias semana</p>
+    <p class="text-3xl font-black text-pink-800 mt-1">${{ "%.2f"|format(total_asistencias) }}</p>
+  </div>
+  <div class="bg-white/80 border border-pink-100 rounded-xl shadow-sm p-4">
+    <p class="text-xs font-black text-pink-400 uppercase tracking-widest">Pagado de esta semana</p>
+    <p class="text-3xl font-black text-green-700 mt-1">${{ "%.2f"|format(total_pagado) }}</p>
+  </div>
+</div>
+
+<section class="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-pink-100 overflow-hidden">
+  {% if payment_summary %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full border-collapse">
+        <thead>
+          <tr class="bg-pink-50 border-b border-pink-100">
+            {% for employee in payment_summary %}
+            <th class="min-w-[210px] border-r border-pink-100 p-4 text-center align-top last:border-r-0">
+              <div class="text-2xl font-black text-gray-900">${{ "%.2f"|format(employee.total_esperado) }}</div>
+              <div class="text-[10px] font-black text-pink-400 uppercase tracking-widest mt-1">Debe cobrar</div>
+            </th>
+            {% endfor %}
+          </tr>
+          <tr class="bg-white border-b border-pink-100">
+            {% for employee in payment_summary %}
+            <th class="payment-drop-zone border-r border-pink-100 px-4 py-3 text-left last:border-r-0" data-employee-id="{{ employee.id if employee.id is not none else '' }}">
+              <div class="flex items-center gap-2">
+                <span class="h-8 w-8 rounded-full bg-pink-100 text-pink-700 flex items-center justify-center font-black">
+                  {{ employee.nombre[:1]|upper }}
+                </span>
+                <span class="font-black text-gray-800">{{ employee.nombre }}</span>
+              </div>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {% for employee in payment_summary %}
+            <td class="payment-drop-zone border-r border-pink-100 p-4 align-top last:border-r-0 transition-colors" data-employee-id="{{ employee.id if employee.id is not none else '' }}">
+              {% if employee.pagos %}
+                <div class="space-y-2">
+                  {% for pago in employee.pagos %}
+                  <div
+                    class="payment-chip flex items-start justify-between gap-3 text-sm rounded-lg px-2 py-1 transition-colors {% if pago.pago_ids %}cursor-move hover:bg-pink-50{% endif %}"
+                    {% if pago.pago_ids %}
+                    draggable="true"
+                    data-pago-ids='{{ pago.pago_ids|tojson }}'
+                    data-current-employee-id="{{ employee.id if employee.id is not none else '' }}"
+                    {% endif %}
+                  >
+                    <div class="min-w-0">
+                      <p class="font-semibold text-gray-800 truncate">
+                        {{ pago.nombre_nino }}{% if pago.tipo %} ({{ pago.tipo }}){% endif %}
+                      </p>
+                    </div>
+                    <span class="font-black text-gray-900 whitespace-nowrap">${{ "%.2f"|format(pago.monto) }}</span>
+                  </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-sm font-semibold text-gray-300 text-center py-8">Sin pagos</p>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr class="bg-gray-50 border-t border-pink-100">
+            {% for employee in payment_summary %}
+            <td class="border-r border-pink-100 p-4 text-center last:border-r-0">
+              <div class="text-2xl font-black text-green-700">${{ "%.2f"|format(employee.total_pagado) }}</div>
+              <div class="text-sm font-black text-red-600 mt-2">${{ "%.2f"|format(employee.total_pendiente) }}</div>
+            </td>
+            {% endfor %}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-center py-16">
+      <i class="fas fa-money-bill-wave text-pink-200 text-5xl mb-4"></i>
+      <p class="text-pink-500 font-semibold">No hay empleadas registradas para mostrar esta semana.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let draggedPayment = null;
+
+  document.querySelectorAll('.payment-chip[draggable="true"]').forEach((chip) => {
+    chip.addEventListener('dragstart', (event) => {
+      draggedPayment = {
+        pagoIds: JSON.parse(chip.dataset.pagoIds || '[]'),
+        currentEmployeeId: chip.dataset.currentEmployeeId || ''
+      };
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', chip.dataset.pagoIds || '[]');
+      chip.classList.add('opacity-50');
+    });
+
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('opacity-50');
+      document.querySelectorAll('.payment-drop-zone').forEach((zone) => {
+        zone.classList.remove('bg-pink-50', 'ring-2', 'ring-pink-300');
+      });
+      draggedPayment = null;
+    });
+  });
+
+  document.querySelectorAll('.payment-drop-zone').forEach((zone) => {
+    zone.addEventListener('dragover', (event) => {
+      if (!draggedPayment || !zone.dataset.employeeId || zone.dataset.employeeId === draggedPayment.currentEmployeeId) {
+        return;
+      }
+      event.preventDefault();
+      zone.classList.add('bg-pink-50', 'ring-2', 'ring-pink-300');
+    });
+
+    zone.addEventListener('dragleave', () => {
+      zone.classList.remove('bg-pink-50', 'ring-2', 'ring-pink-300');
+    });
+
+    zone.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      zone.classList.remove('bg-pink-50', 'ring-2', 'ring-pink-300');
+
+      if (!draggedPayment || !zone.dataset.employeeId || zone.dataset.employeeId === draggedPayment.currentEmployeeId) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/pagos/reasignar_empleada', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pago_ids: draggedPayment.pagoIds,
+            id_empleado: zone.dataset.employeeId
+          })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          alert(data.error || 'No se pudo cambiar quien recibio el pago.');
+          return;
+        }
+        window.location.reload();
+      } catch (error) {
+        alert('Error de conexion al cambiar quien recibio el pago.');
+      }
+    });
+  });
+</script>
+{% endblock %}

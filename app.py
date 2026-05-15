@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 # Deploy trigger: 2025-12-22
 from datetime import datetime, timedelta
+import unicodedata
 import pytz
 from database import (
                       get_nino, get_ninos, add_nino, update_nino, delete_nino,
@@ -14,7 +15,8 @@ from database import (
                        get_week_gastos, add_gasto, update_gasto, delete_gasto,
                        verify_employee_credentials, get_ninos_con_deuda,
                        get_grouped_pagos, get_pagos_group_details, delete_pago,
-                       get_week_children_summary)
+                       get_week_children_summary, get_week_attendance_payment_summary,
+                       update_pagos_empleado)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -25,6 +27,54 @@ def utility_processor():
     def is_admin():
         return 'user_level' in session and session['user_level'] == 'Admin'
     return dict(is_admin=is_admin)
+
+def normalize_employee_name(value):
+    normalized = unicodedata.normalize('NFKD', str(value or '').strip().lower())
+    return ''.join(char for char in normalized if not unicodedata.combining(char))
+
+def build_week_payment_summary(attendance_payment_summary, employee_earnings, week_gastos_total, active_employees=None):
+    summary = []
+    seen_employee_keys = set()
+    payments_by_employee = attendance_payment_summary.get('employees', {})
+    earnings_by_employee = {
+        str(employee.get('id')): float(employee.get('total_ganancia') or 0)
+        for employee in employee_earnings or []
+    }
+
+    for employee in active_employees or []:
+        employee_id = employee.get('id')
+        employee_key = str(employee_id)
+        payments_group = payments_by_employee.get(employee_key, {})
+        employee_name = employee.get('nombre') or payments_group.get('nombre') or 'Desconocida'
+        total_pagado = float(payments_group.get('total_pagado') or 0)
+        total_esperado = earnings_by_employee.get(employee_key, 0)
+        if normalize_employee_name(employee_name) == 'anais':
+            total_esperado += float(week_gastos_total or 0)
+
+        summary.append({
+            'id': employee_id,
+            'nombre': employee_name,
+            'total_esperado': total_esperado,
+            'total_pagado': total_pagado,
+            'total_pendiente': max(total_esperado - total_pagado, 0),
+            'pagos': payments_group.get('pagos', [])
+        })
+        seen_employee_keys.add(employee_key)
+
+    for employee_key, payments_group in payments_by_employee.items():
+        if employee_key in seen_employee_keys:
+            continue
+
+        summary.append({
+            'id': payments_group.get('id'),
+            'nombre': payments_group.get('nombre') or 'Desconocida',
+            'total_esperado': 0,
+            'total_pagado': float(payments_group.get('total_pagado') or 0),
+            'total_pendiente': 0,
+            'pagos': payments_group.get('pagos', [])
+        })
+
+    return summary
 
 from functools import wraps
 
@@ -146,6 +196,49 @@ def resumen_semanal(date=None):
         next_week_start_str=next_week_start.strftime('%Y-%m-%d'),
         children_weekly_summary=children_weekly_summary,
         week_employees_earnings=week_employees_earnings
+    )
+
+@app.route('/resumen-pagos')
+@app.route('/resumen-pagos/<date>')
+def resumen_pagos(date=None):
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    if date:
+        try:
+            current_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            current_date = get_current_time().date()
+    else:
+        current_date = get_current_time().date()
+
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    prev_week_start = start_of_week - timedelta(days=7)
+    next_week_start = start_of_week + timedelta(days=7)
+
+    active_employees = get_active_employees()
+    week_employees_earnings = get_week_employees_earnings(start_of_week, end_of_week)
+    _, week_gastos_total = get_week_gastos(start_of_week, end_of_week)
+    week_gastos_total = week_gastos_total or 0
+    attendance_payment_summary = get_week_attendance_payment_summary(start_of_week, end_of_week)
+    payment_summary = build_week_payment_summary(
+        attendance_payment_summary,
+        week_employees_earnings,
+        week_gastos_total,
+        active_employees
+    )
+
+    return render_template(
+        'resumen_pagos.html',
+        active_page='resumen_pagos',
+        week_start_str=start_of_week.strftime('%Y-%m-%d'),
+        week_end_str=end_of_week.strftime('%Y-%m-%d'),
+        prev_week_start_str=prev_week_start.strftime('%Y-%m-%d'),
+        next_week_start_str=next_week_start.strftime('%Y-%m-%d'),
+        payment_summary=payment_summary,
+        total_asistencias=attendance_payment_summary.get('total_asistencias', 0),
+        total_pagado=attendance_payment_summary.get('total_pagado', 0)
     )
 
 @app.route('/gastos')
@@ -432,7 +525,7 @@ def hoy(date=None):
     # Obtener información del día para el título
     try:
         target_date_obj = date_class.fromisoformat(target_date)
-        day_names = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+        day_names = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
         day_name = day_names[target_date_obj.weekday()]
         formatted_date = target_date_obj.strftime('%d/%m/%Y')
     except:
@@ -822,6 +915,29 @@ def revertir_grupo_api():
         return jsonify({'error': 'No se pudo revertir ningún pago'}), 500
     except Exception as e:
         print(f"Error en revertir_grupo_api: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pagos/reasignar_empleada', methods=['POST'])
+@admin_required
+def reasignar_pago_empleada_api():
+    if 'user' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        data = request.json or {}
+        pago_ids = data.get('pago_ids', [])
+        id_empleado = data.get('id_empleado')
+
+        if not pago_ids or id_empleado is None:
+            return jsonify({'error': 'Faltan pago_ids o id_empleado'}), 400
+
+        if update_pagos_empleado(pago_ids, int(id_empleado)):
+            return jsonify({'success': True})
+
+        return jsonify({'error': 'No se pudo reasignar el pago'}), 500
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Datos invalidos para reasignar el pago'}), 400
+    except Exception as e:
+        print(f"Error en reasignar_pago_empleada_api: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['GET', 'POST'])
