@@ -769,12 +769,17 @@ def get_week_children_summary(start_of_week, end_of_week):
         if not (hasattr(response, 'data') and response.data):
             return []
 
+        spanish_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                          'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
         week_days = []
         for i in range(5):
             date_obj = start_of_week + timedelta(days=i)
+            label = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'][i]
+            label_full = f"{label} {date_obj.day:02d}-{spanish_months[date_obj.month - 1]}"
             week_days.append({
                 'date': date_obj.isoformat(),
-                'label': ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'][i]
+                'label': label,
+                'label_full': label_full
             })
 
         nino_ids = list(set(item['id_persona'] for item in response.data))
@@ -795,7 +800,7 @@ def get_week_children_summary(start_of_week, end_of_week):
                     'id': nino_id,
                     'nombre': nino_names_map.get(nino_id, 'Desconocido'),
                     'total': 0,
-                    'daily': [{'label': d['label'], 'date': d['date'], 'amount': 0} for d in week_days]
+                    'daily': [{'label': d['label'], 'label_full': d['label_full'], 'date': d['date'], 'amount': 0} for d in week_days]
                 }
 
             for daily_item in children_summary[nino_id]['daily']:

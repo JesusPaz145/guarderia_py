@@ -26,19 +26,50 @@
     {% if children_weekly_summary %}
       <div class="space-y-3">
         {% for child in children_weekly_summary %}
-        <div class="border border-pink-200 rounded-xl overflow-hidden">
-          <button type="button" class="child-toggle w-full flex items-center justify-between px-4 py-3 bg-pink-50 hover:bg-pink-100 transition-colors" data-target="child-{{ child.id }}">
-            <span class="font-semibold text-pink-800">{{ child.nombre }}</span>
-            <span class="font-bold text-pink-700">${{ "%.2f"|format(child.total) }}</span>
-          </button>
+        <div class="border border-pink-200 rounded-xl overflow-hidden" data-child-card="{{ child.id }}">
+          <div class="flex items-stretch bg-pink-50">
+            <button type="button" class="child-toggle flex-1 flex items-center justify-between px-4 py-3 hover:bg-pink-100 transition-colors" data-target="child-{{ child.id }}">
+              <span class="font-semibold text-pink-800">{{ child.nombre }}</span>
+              <span class="font-bold text-pink-700">${{ "%.2f"|format(child.total) }}</span>
+            </button>
+            <button type="button"
+                    class="share-child-btn px-4 flex items-center justify-center text-pink-600 hover:text-pink-800 hover:bg-pink-100 border-l border-pink-200 transition-colors"
+                    data-share-target="share-card-{{ child.id }}"
+                    data-child-name="{{ child.nombre }}"
+                    title="Compartir">
+              <i class="fas fa-share-alt"></i>
+            </button>
+          </div>
           <div id="child-{{ child.id }}" class="hidden px-4 py-3 bg-white">
             <div class="space-y-2">
-              {% for day in child.daily %}
+              {% for day in child.daily if day.amount > 0 %}
               <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-600">{{ day.label }}</span>
+                <span class="text-gray-600">{{ day.label_full }}</span>
                 <span class="font-medium text-gray-800">${{ "%.2f"|format(day.amount) }}</span>
               </div>
               {% endfor %}
+            </div>
+          </div>
+
+          {# Plantilla oculta usada para generar la imagen compartible #}
+          <div id="share-card-{{ child.id }}" class="share-card-template" aria-hidden="true">
+            <div class="share-card">
+              <div class="share-card-header">
+                <span class="share-card-name">{{ child.nombre }}</span>
+                <span class="share-card-total">${{ "%.2f"|format(child.total) }}</span>
+              </div>
+              <div class="share-card-body">
+                {% for day in child.daily if day.amount > 0 %}
+                <div class="share-card-row">
+                  <span class="share-card-day">{{ day.label_full }}</span>
+                  <span class="share-card-amount">${{ "%.2f"|format(day.amount) }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="share-card-footer">
+                <span class="share-card-name">Total</span>
+                <span class="share-card-total">${{ "%.2f"|format(child.total) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -70,13 +101,132 @@
 </div>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  .share-card-template {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    pointer-events: none;
+  }
+  .share-card {
+    width: 520px;
+    background: #ffffff;
+    border: 1px solid #fbcfe8;
+    border-radius: 18px;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 8px 24px rgba(244, 114, 182, 0.12);
+  }
+  .share-card-header,
+  .share-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 22px;
+    background: #fdf2f8;
+  }
+  .share-card-footer {
+    border-top: 1px solid #fbcfe8;
+  }
+  .share-card-name {
+    color: #be185d;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .share-card-total {
+    color: #be185d;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .share-card-body {
+    padding: 14px 22px;
+    background: #ffffff;
+  }
+  .share-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 15px;
+  }
+  .share-card-day {
+    color: #6b7280;
+  }
+  .share-card-amount {
+    color: #1f2937;
+    font-weight: 500;
+  }
+</style>
+{% endblock %}
+
 {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
   document.querySelectorAll('.child-toggle').forEach((btn) => {
     btn.addEventListener('click', () => {
       const targetId = btn.getAttribute('data-target');
       const panel = document.getElementById(targetId);
       panel.classList.toggle('hidden');
+    });
+  });
+
+  async function compartirNino(btn) {
+    const targetId = btn.getAttribute('data-share-target');
+    const childName = btn.getAttribute('data-child-name') || 'Resumen';
+    const template = document.getElementById(targetId);
+    if (!template || typeof html2canvas === 'undefined') {
+      alert('No se pudo generar la imagen.');
+      return;
+    }
+
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+    btn.disabled = true;
+
+    try {
+      const canvas = await html2canvas(template.querySelector('.share-card'), {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Blob nulo');
+
+      const fileName = `${childName.replace(/\s+/g, '_')}_resumen.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Resumen de ${childName}`,
+          text: `Resumen semanal de ${childName}`
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      if (err && err.name !== 'AbortError') {
+        console.error(err);
+        alert('Error al compartir la imagen.');
+      }
+    } finally {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+    }
+  }
+
+  document.querySelectorAll('.share-child-btn').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      compartirNino(btn);
     });
   });
 </script>
